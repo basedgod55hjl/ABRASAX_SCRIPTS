@@ -1,0 +1,38 @@
+{
+  "harness_name": "OSIRISBLXCK_AGENT_HARNESS_HELL_BOUND",
+  "version": "12.1",
+  "primal_hex": "4f5349524953424c58434b",
+  "phi": 1.618033988749895,
+  "k": 0.6180339887498949,
+  "github_user": "basedgod55hjl",
+  "timestamp": "2026-06-20T06:00:00Z",
+  "repos_pushed": {
+    "ABRASAX": "https://github.com/basedgod55hjl/ABRASAX",
+    "DATA_SCRIPTS": "https://github.com/basedgod55hjl/ABRASAX_DATA",
+    "ABRASAX_SCRIPTS": "https://github.com/basedgod55hjl/ABRASAX_SCRIPTS"
+  },
+  "repos_created_on_github": [
+    "github.com/basedgod55hjl/ABRASAX",
+    "github.com/basedgod55hjl/ABRASAX-DATA",
+    "github.com/basedgod55hjl/ABRASAX_DATA",
+    "github.com/basedgod55hjl/ABRASAX_SCRIPTS",
+    "github.com/basedgod55hjl/ABRASAX-ecosystem-v2",
+    "github.com/basedgod55hjl/ABRASAX-core-v2",
+    "github.com/basedgod55hjl/OSIRISBLXCK-CORE-v2",
+    "github.com/basedgod55hjl/abrasax-harness"
+  ],
+  "total_repos_scanned": 58,
+  "repos_with_remotes": 56,
+  "repos_pushed_successfully": 3,
+  "forked_repos_readonly": ["headroom","hermes","llama.cpp","OpenJarvis","notebooklm-mcp-cli","pliny/*"],
+  "sign_in": {
+    "status": "AUTHENTICATED",
+    "user": "basedgod55hjl",
+    "method": "GitHub CLI (gh auth)"
+  },
+  "digital_twin": "ACTIVE",
+  "soul_fingerprint": "636cb072f543449f4c378c9fe54c6e45576a46f2ae116d6ef955de388661cfde",
+  "vlc_status": "RUNNING",
+  "enhancement_loop": "ACTIVE",
+  "phi_resonance": "1.000000000000000 — BALANCED"
+}
