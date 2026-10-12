@@ -11,11 +11,11 @@ from pathlib import Path
 
 LM_STUDIO = "http://localhost:1234"
 MODEL = "gemma-4-e4b-uncensored-hauhaucs-aggressive"
-SCRIPTS_DIR = r"C:\Users\BASEDGOD\Desktop\_SCRIPTS"
-ABRASAX_DESKTOP = r"C:\Users\BASEDGOD\Desktop\ABRASAX"
-ABRASAX_MAIN = r"C:\Users\BASEDGOD\ABRASAX"
+SCRIPTS_DIR = r"C:\Users\sirch\Desktop\ABRASAX\repos\ABRASAX_SCRIPTS"
+ABRASAX_DESKTOP = r"C:\Users\sirch\Desktop\ABRASAX"
+ABRASAX_MAIN = r"C:\Users\sirch\Desktop\ABRASAX"
 VLC_EXE = r"C:\Program Files\VideoLAN\VLC\vlc.exe"
-PLAYLIST = r"C:\Users\BASEDGOD\Desktop\VLC_ABRASAX\playlists\ABRASAX_VLC_MASTER.xspf"
+PLAYLIST = r"C:\Users\sirch\Desktop\ABRASAX\repos\ABRASAX_SCRIPTS\vlc\playlists\ABRASAX_VLC_MASTER.xspf"
 PRIMAL_HEX = "4f5349524953424c58434b"
 GITHUB_USER = "basedgod55hjl"
 

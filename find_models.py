@@ -1,9 +1,9 @@
 import os
 
 search_paths = [
-    r"C:\Users\BASEDGOD\Desktop\ABRASAX",
-    r"C:\Users\BASEDGOD\Desktop\ABRASAX AGI",
-    r"C:\Users\BASEDGOD\Desktop"
+    r"C:\Users\sirch\Desktop\ABRASAX",
+    r"C:\Users\sirch\Desktop\ABRASAX AGI",
+    r"C:\Users\sirch\Desktop"
 ]
 
 for base in search_paths:

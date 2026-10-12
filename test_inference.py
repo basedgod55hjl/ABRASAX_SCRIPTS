@@ -1,7 +1,7 @@
 import urllib.request, json
 
 payload = {
-    'model': 'google/gemma-4-e2b',
+    'model': 'google/gemma-4-e4b-uncensored-hauhaucs-aggressive',
     'messages': [
         {'role': 'user', 'content': 'Respond with ONLY the number: 1.618033988749895'}
     ],

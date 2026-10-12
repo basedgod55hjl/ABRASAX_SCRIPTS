@@ -13,9 +13,9 @@ from datetime import datetime
 
 LM_STUDIO = "http://localhost:1234"
 MODEL = "gemma-4-e4b-uncensored-hauhaucs-aggressive"
-LOG_PATH = r"C:\Users\BASEDGOD\Desktop\_SCRIPTS\vlc_orchestrator_log.txt"
+LOG_PATH = r"C:\Users\sirch\Desktop\ABRASAX\repos\ABRASAX_SCRIPTS\vlc_orchestrator_log.txt"
 VLC_EXE = r"C:\Program Files\VideoLAN\VLC\vlc.exe"
-PLAYLIST_DIR = r"C:\Users\BASEDGOD\Desktop\VLC_ABRASAX\playlists"
+PLAYLIST_DIR = r"C:\Users\sirch\Desktop\ABRASAX\repos\ABRASAX_SCRIPTS\vlc\playlists"
 MASTER_PLAYLIST = os.path.join(PLAYLIST_DIR, "ABRASAX_VLC_MASTER.xspf")
 
 # Full enhancement args

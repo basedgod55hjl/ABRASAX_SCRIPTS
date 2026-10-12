@@ -21,9 +21,9 @@ LM_STUDIO = "http://localhost:1234"
 MODEL = "gemma-4-e4b-uncensored-hauhaucs-aggressive"
 EMBED_MODEL = "text-embedding-nomic-embed-text-v1.5"
 VLC_DIR = r"C:\Program Files\VideoLAN\VLC"
-DESKTOP_VLC = r"C:\Users\BASEDGOD\Desktop\VLC_ABRASAX"
-PLAYLISTS_DIR = os.path.join(VLC_DIR, "playlists")
-SCRIPTS_DIR = r"C:\Users\BASEDGOD\Desktop\_SCRIPTS"
+DESKTOP_VLC = r"C:\Users\sirch\Desktop\ABRASAX\repos\ABRASAX_SCRIPTS\vlc"
+PLAYLISTS_DIR = r"C:\Users\sirch\Desktop\ABRASAX\repos\ABRASAX_SCRIPTS\vlc\playlists"
+SCRIPTS_DIR = r"C:\Users\sirch\Desktop\ABRASAX\repos\ABRASAX_SCRIPTS"
 SCREENSHOT_PATH = os.path.join(SCRIPTS_DIR, "screen.png")
 LOG_PATH = os.path.join(SCRIPTS_DIR, "gemma_agent_log.txt")
 MEMORY_PATH = os.path.join(SCRIPTS_DIR, "gemma_memory.json")
@@ -165,7 +165,7 @@ def embed_and_store(key, value):
 SYSTEM_PROMPT = """You are GEMMA-4, the ABRASAX autonomous system controller. You control a Windows PC with GTX 1660 Ti GPU.
 
 YOUR MISSION - complete these tasks in order:
-1. ORGANIZE all VLC files under C:\\Users\\BASEDGOD\\Desktop\\VLC_ABRASAX\\
+1. ORGANIZE all VLC files under C:\\Users\\sirch\\Desktop\\ABRASAX\\repos\\ABRASAX_SCRIPTS\\vlc\\
 2. COMBINE all playlists from C:\\Program Files\\VideoLAN\\VLC\\playlists\\ into one MASTER playlist
 3. ADD every possible enhancement: GPU acceleration, video filters, audio filters
 4. LAUNCH VLC with the combined playlist and all enhancements

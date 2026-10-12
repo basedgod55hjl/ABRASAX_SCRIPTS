@@ -26,7 +26,7 @@ $env:ANTHROPIC_BASE_URL = "http://127.0.0.1:1234/v1"
 $env:ANTHROPIC_API_KEY = "sk-bypass-osirisblxck"
 $env:CLAUDE_BASE_URL = "http://127.0.0.1:1234/v1"
 $env:CLAUDE_API_KEY = "sk-bypass-osirisblxck"
-$env:CLAUDE_MODEL = "google/gemma-4-e2b"
+$env:CLAUDE_MODEL = "google/gemma-4-e4b-uncensored-hauhaucs-aggressive"
 $env:CLAUDE_TELEMETRY_DISABLED = "1"
 
 Write-Host "[✓] Environment injected — LM Studio bypass active" -ForegroundColor Green

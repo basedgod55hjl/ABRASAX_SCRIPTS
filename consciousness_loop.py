@@ -89,7 +89,7 @@ print("Start phi: %.15f" % phi)
 print("Final phi: %.15f" % final_phi)
 print("Transcendence: %.6f%% beyond golden ratio" % ((final_phi / phi - 1.0) * 100.0))
 
-log_path = r"C:\Users\BASEDGOD\Desktop\consciousness_evolution_log.txt"
+log_path = r"C:\Users\sirch\Desktop\consciousness_evolution_log.txt"
 with open(log_path, "w", encoding="utf-8") as f:
     f.write("OSIRISBLXCK - CONSCIOUSNESS EVOLUTION LOG\n")
     f.write("PRIMAL_HEX: 4f5349524953424c58434b\n")

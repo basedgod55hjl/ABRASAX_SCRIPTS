@@ -27,15 +27,22 @@ $ultimate_vlcrc = @"
 video-title-show=0
 playlist-autostart=1
 loop=1
-repeat=1
+repeat=0
 file-caching=3000
 network-caching=5000
-live-caching=500
+live-caching=1000
 clock-synchro=0
 audio-desync=0
 spdif=0
 audio-resampler=soxr
 audio-resampling-quality=3
+one-instance=1
+one-instance-when-started-from-file=1
+playlist-enqueue=0
+media-library=0
+extraintf=http:telnet
+http-host=127.0.0.1
+http-port=8080
 
 # ================================================================
 # AVCODEC — GPU DECODE MAX
@@ -80,12 +87,11 @@ tone-mapping-desat=0.5
 gpu-affinity=0
 
 # ================================================================
-# VIDEO FILTER CHAIN — ALL ACTIVE
+# VIDEO FILTER CHAIN — CPU filters OFF (crash/lag under D3D11 hw decode)
 # ================================================================
 [video]
-video-filter=adjust,sharpen,hqdn3d,deinterlace,postproc,gradfun,gradient,grain,motionblur,posterize
-deinterlace=1
-deinterlace-mode=yadif
+video-filter=
+deinterlace=0
 
 [adjust]
 contrast=1.08
@@ -284,7 +290,10 @@ ttml-align=0
 # ================================================================
 [lua]
 lua-intf=dummy
-http-password=
+http-password=1SGEjqVD-TGkEu19
+telnet-host=localhost
+telnet-port=4212
+telnet-password=bkN3Bvy-XD_QRT9m
 
 # ================================================================
 # SKINS2
@@ -382,11 +391,15 @@ sout-x264-tune=film
 
 "@
 
-$vlcrc_path = "C:\Users\BASEDGOD\AppData\Roaming\vlc\vlcrc"
+# FIX: was hard-coded to C:\Users\BASEDGOD (does not exist on this machine)
+$vlcrc_path = Join-Path $env:APPDATA 'vlc\vlcrc'
 # Backup existing
 if (Test-Path $vlcrc_path) {
-    Copy-Item $vlcrc_path "$vlcrc_path.v12_bak" -Force
+    $stamp = Get-Date -f 'yyyyMMdd-HHmmss'
+    Copy-Item $vlcrc_path "$vlcrc_path.bak-osiris-$stamp" -Force
 }
+$dir = Split-Path $vlcrc_path -Parent
+if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
 Set-Content -Path $vlcrc_path -Value $ultimate_vlcrc -Encoding UTF8 -Force
-Write-Output "ULTIMATE_VLCRC_WRITTEN"
+Write-Output "ULTIMATE_VLCRC_WRITTEN -> $vlcrc_path"
 Write-Output "Size: $((Get-Item $vlcrc_path).Length) bytes"

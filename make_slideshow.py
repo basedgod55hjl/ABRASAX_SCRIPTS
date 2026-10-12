@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 import os
 
-aeon_dir = r'C:\Users\BASEDGOD\Desktop\ABRASAX\aeon'
-out_dir = r'C:\Users\BASEDGOD\Desktop'
+aeon_dir = r'C:\Users\sirch\Desktop\ABRASAX\aeon'
+out_dir = r'C:\Users\sirch\Desktop'
 
 files = [f for f in os.listdir(aeon_dir) if f.startswith('art_epoch_') and f.endswith('.ppm')]
 epochs = []

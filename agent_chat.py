@@ -8,7 +8,7 @@ from datetime import datetime
 
 LM_STUDIO = "http://localhost:1234"
 MODEL = "gemma-4-e4b-uncensored-hauhaucs-aggressive"
-SCRIPTS_DIR = r"C:\Users\BASEDGOD\Desktop\_SCRIPTS"
+SCRIPTS_DIR = r"C:\Users\sirch\Desktop\ABRASAX\repos\ABRASAX_SCRIPTS"
 CHAT_LOG = os.path.join(SCRIPTS_DIR, "chat_history.json")
 PRIMAL_HEX = "4f5349524953424c58434b"
 

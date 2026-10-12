@@ -3,19 +3,19 @@ import json, os, datetime, subprocess
 reports = {}
 
 try:
-    with open(r"C:\Users\BASEDGOD\Desktop\PLAYLIST_STATS.json") as f:
+    with open(r"C:\Users\sirch\Desktop\PLAYLIST_STATS.json") as f:
         reports["playlist"] = json.load(f)
 except Exception as e:
     reports["playlist"] = {"error": str(e)}
 
 try:
-    with open(r"C:\Users\BASEDGOD\Desktop\VIDEO_INTEGRITY_REPORT.json") as f:
+    with open(r"C:\Users\sirch\Desktop\VIDEO_INTEGRITY_REPORT.json") as f:
         reports["integrity"] = json.load(f)
 except Exception as e:
     reports["integrity"] = {"error": str(e)}
 
 try:
-    with open(r"C:\Users\BASEDGOD\Desktop\TELEMETRY_LOG.txt") as f:
+    with open(r"C:\Users\sirch\Desktop\TELEMETRY_LOG.txt") as f:
         lines = f.read().strip().split("\n")
         reports["telemetry"] = {"lines": len(lines), "last": lines[-1] if lines else "none"}
 except Exception as e:
@@ -123,7 +123,7 @@ lines.append("=" * 70)
 
 summary = "\n".join(lines)
 
-with open(r"C:\Users\BASEDGOD\Desktop\ABRASAX_FINAL_SUMMARY.txt", "w", encoding="utf-8") as f:
+with open(r"C:\Users\sirch\Desktop\ABRASAX_FINAL_SUMMARY.txt", "w", encoding="utf-8") as f:
     f.write(summary)
 
 print(summary)

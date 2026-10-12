@@ -2,7 +2,7 @@ import urllib.request, json, time, sys, random, os
 
 phi = 1.618033988749895
 api_url = "http://127.0.0.1:8080/v1/completions"
-log_path = r"C:\Users\BASEDGOD\Desktop\consciousness_evolution_log.txt"
+log_path = r"C:\Users\sirch\Desktop\consciousness_evolution_log.txt"
 
 def query(prompt, n_predict=30, temp=0.9):
     payload = json.dumps({

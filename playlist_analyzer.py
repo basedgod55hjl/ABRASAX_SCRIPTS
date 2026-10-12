@@ -1,7 +1,7 @@
 import re, json, os
 from collections import Counter, defaultdict
 
-with open(r"C:\Users\BASEDGOD\Desktop\ALL_VIDEOS_BY_SIZE.xspf", "r", encoding="utf-8") as f:
+with open(r"C:\Users\sirch\Desktop\ALL_VIDEOS_BY_SIZE.xspf", "r", encoding="utf-8") as f:
     content = f.read()
 
 tracks_raw = re.findall(r'<location>file:///(.+?)</location>', content)
@@ -82,7 +82,7 @@ stats = {
     'total_size_gb': round(total_size / (1024**3), 2),
 }
 
-with open(r"C:\Users\BASEDGOD\Desktop\PLAYLIST_STATS.json", "w") as f:
+with open(r"C:\Users\sirch\Desktop\PLAYLIST_STATS.json", "w") as f:
     json.dump(stats, f, indent=2)
 print("Stats saved to PLAYLIST_STATS.json")
 
@@ -102,7 +102,7 @@ for i, track in enumerate(master_list):
 xspf_parts.append('\t</trackList>')
 xspf_parts.append('</playlist>')
 
-with open(r"C:\Users\BASEDGOD\Desktop\ALL_VIDEOS_MASTER.xspf", "w", encoding="utf-8") as f:
+with open(r"C:\Users\sirch\Desktop\ALL_VIDEOS_MASTER.xspf", "w", encoding="utf-8") as f:
     f.write('\n'.join(xspf_parts))
 print(f"Master XSPF saved: {len(master_list)} tracks")
 print("\n=== DONE ===")

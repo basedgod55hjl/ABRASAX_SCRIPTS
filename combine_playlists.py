@@ -1,7 +1,7 @@
 import os, xml.etree.ElementTree as ET, hashlib, json
 from datetime import datetime
 
-playlist_dir = r'C:\Users\BASEDGOD\Desktop\VLC_ABRASAX\playlists'
+playlist_dir = r'C:\Users\sirch\Desktop\ABRASAX\repos\ABRASAX_SCRIPTS\vlc\playlists'
 output_file = os.path.join(playlist_dir, 'VLC_ABRASAX_MASTER_COMBINED.xspf')
 
 seen = set()

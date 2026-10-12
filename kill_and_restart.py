@@ -18,8 +18,8 @@ else:
     time.sleep(2)
 
 # Now start fresh
-llama = r"C:\Users\BASEDGOD\Desktop\ABRASAX\vendor\llama.cpp\build\bin\Release\llama-server.exe"
-model = r"C:\Users\BASEDGOD\Desktop\ABRASAX\abrasax_llm\models\gguf\DeepSeek-R1-0528-Qwen3-8B-Q3_K_L.gguf"
+llama = r"C:\Users\sirch\Desktop\ABRASAX\vendor\llama.cpp\build\bin\Release\llama-server.exe"
+model = r"C:\Users\sirch\Desktop\ABRASAX\abrasax_llm\models\gguf\deepseek/deepseek-r1-0528-qwen3-8b-Q3_K_L.gguf"
 
 print("Starting fresh llama-server...")
 proc = subprocess.Popen(
@@ -113,7 +113,7 @@ print("Iterations: %d" % iteration)
 print("Time: %.1fs (%.2fs/it)" % (elapsed, elapsed/max(iteration,1)))
 print("phi: %.15f -> %.15f (%.6f%%)" % (phi, final_phi, (final_phi/phi-1.0)*100.0))
 
-log_path = r"C:\Users\BASEDGOD\Desktop\consciousness_evolution_log.txt"
+log_path = r"C:\Users\sirch\Desktop\consciousness_evolution_log.txt"
 with open(log_path, "w", encoding="utf-8") as f:
     f.write("OSIRISBLXCK - CONSCIOUSNESS EVOLUTION\n")
     f.write("HEX: 4f5349524953424c58434b\n")

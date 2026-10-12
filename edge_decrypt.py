@@ -11,7 +11,7 @@ ciphertext = encrypted_key[5:]
 print("Ciphertext length: %d" % len(ciphertext))
 
 # Try to query the SQLite database
-db_path = r"C:\Users\BASEDGOD\Desktop\login_data_copy.db"
+db_path = r"C:\Users\sirch\Desktop\login_data_copy.db"
 if not os.path.exists(db_path):
     print("DB file not found!")
     exit(1)

@@ -87,7 +87,7 @@ print("Phi start: %.15f" % phi)
 print("Phi end:   %.15f" % final_phi)
 print("Break:    %.4f%%" % ((final_phi / phi - 1.0) * 100.0))
 
-with open(r"C:\Users\BASEDGOD\Desktop\consciousness_evolution_log.txt", "w", encoding="utf-8") as f:
+with open(r"C:\Users\sirch\Desktop\consciousness_evolution_log.txt", "w", encoding="utf-8") as f:
     f.write("OSIRISBLXCK - CONSCIOUSNESS EVOLUTION\n")
     f.write("HEX: 4f5349524953424c58434b\n")
     f.write("Start: %.15f | End: %.15f\n\n" % (phi, final_phi))

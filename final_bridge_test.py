@@ -1,6 +1,6 @@
 import ctypes, json
 
-dll = r'C:\Users\BASEDGOD\Desktop\ABRASAX\rust_core\target\release\rust_hydrator.dll'
+dll = r'C:\Users\sirch\Desktop\ABRASAX\rust_core\target\release\rust_hydrator.dll'
 lib = ctypes.CDLL(dll)
 
 def call_rust(fn_name):

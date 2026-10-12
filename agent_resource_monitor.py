@@ -16,7 +16,7 @@ import threading
 # ═══════════════════════════════════════════════════════
 LM_STUDIO = "http://localhost:1234"
 MODEL = "gemma-4-e4b-uncensored-hauhaucs-aggressive"
-LOG_PATH = r"C:\Users\BASEDGOD\Desktop\_SCRIPTS\resource_monitor_log.txt"
+LOG_PATH = r"C:\Users\sirch\Desktop\ABRASAX\repos\ABRASAX_SCRIPTS\resource_monitor_log.txt"
 
 def log(msg):
     t = datetime.now().strftime("%H:%M:%S")

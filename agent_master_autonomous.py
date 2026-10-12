@@ -27,9 +27,9 @@ from pathlib import Path
 LM_STUDIO = "http://localhost:1234"
 MODEL = "gemma-4-e4b-uncensored-hauhaucs-aggressive"
 EMBED_MODEL = "text-embedding-nomic-embed-text-v1.5"
-SCRIPTS_DIR = r"C:\Users\BASEDGOD\Desktop\_SCRIPTS"
-ABRASAX_DIR = r"C:\Users\BASEDGOD\ABRASAX"
-LM_STUDIO_DIR = r"C:\Users\BASEDGOD\.lmstudio"
+SCRIPTS_DIR = r"C:\Users\sirch\Desktop\ABRASAX\repos\ABRASAX_SCRIPTS"
+ABRASAX_DIR = r"C:\Users\sirch\Desktop\ABRASAX"
+LM_STUDIO_DIR = r"C:\Users\sirch\.lmstudio"
 LOG_PATH = os.path.join(SCRIPTS_DIR, "master_agent_log.txt")
 MEMORY_PATH = os.path.join(SCRIPTS_DIR, "master_memory.json")
 STATE_PATH = os.path.join(SCRIPTS_DIR, "master_state.json")

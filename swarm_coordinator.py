@@ -10,7 +10,7 @@ import os
 import sys
 from datetime import datetime
 
-SCRIPTS_DIR = r"C:\Users\BASEDGOD\Desktop\_SCRIPTS"
+SCRIPTS_DIR = r"C:\Users\sirch\Desktop\ABRASAX\repos\ABRASAX_SCRIPTS"
 
 AGENTS = {
     "Ultimate Master": os.path.join(SCRIPTS_DIR, "agent_ultimate_master.py"),

@@ -14,8 +14,8 @@ from pathlib import Path
 
 LM = 'http://localhost:1234'
 MODEL = 'gemma-4-e4b-uncensored-hauhaucs-aggressive'
-SCRIPTS = Path(r'C:\Users\BASEDGOD\Desktop\_SCRIPTS')
-ABRASAX = Path(r'C:\Users\BASEDGOD\Desktop\ABRASAX')
+SCRIPTS = Path(r'C:\Users\sirch\Desktop\ABRASAX\repos\ABRASAX_SCRIPTS')
+ABRASAX = Path(r'C:\Users\sirch\Desktop\ABRASAX')
 SELF = Path(__file__)
 LOG = SCRIPTS / 'ultimate_agent_log.txt'
 DEVLOG = SCRIPTS / 'dev_feedback_log.txt'
@@ -176,7 +176,7 @@ def ensure_lm_studio():
             subprocess.run(['taskkill', '/f', '/im', 'LM Studio.exe'], capture_output=True, timeout=5)
             subprocess.run(['taskkill', '/f', '/im', 'llama-server.exe'], capture_output=True, timeout=5)
             time.sleep(3)
-            lm_exe = r'C:\Users\BASEDGOD\AppData\Local\Programs\LM Studio\LM Studio.exe'
+            lm_exe = r'C:\Users\sirch\AppData\Local\Programs\LM Studio\LM Studio.exe'
             subprocess.Popen([lm_exe], creationflags=subprocess.CREATE_NO_WINDOW)
             return 'LM Studio restarted - waiting for API...'
         except Exception as e:

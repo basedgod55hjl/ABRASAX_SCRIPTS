@@ -1,6 +1,6 @@
 import ctypes, json
 
-dll = r"C:\Users\BASEDGOD\Desktop\ABRASAX\rust_core\target\release\rust_hydrator.dll"
+dll = r"C:\Users\sirch\Desktop\ABRASAX\rust_core\target\release\rust_hydrator.dll"
 lib = ctypes.CDLL(dll)
 lib.hydrator_exec.argtypes = [ctypes.c_char_p]
 lib.hydrator_exec.restype = ctypes.c_void_p
@@ -43,7 +43,7 @@ for line in report.split('\n'):
 print()
 status_line = "DISCONNECTED"
 if lm_running and server_up:
-    status_line = "CONNECTED (via LM Studio + Gemma-4-E2B)"
+    status_line = "CONNECTED (via LM Studio + gemma-4-e4b-uncensored-hauhaucs-aggressive)"
 print(f"  [{status_line}] LLM Inference Engine (LM Studio server)")
 print()
 
