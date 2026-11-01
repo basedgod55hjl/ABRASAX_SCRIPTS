@@ -1,0 +1,274 @@
+{
+  "created": "2026-10-10 21:19:21",
+  "iterations": [
+    {
+      "n": 1,
+      "started": "2026-10-10 21:19:21",
+      "videos": [
+        {
+          "label": "amd_final_nvidia_enhanced",
+          "ok": true,
+          "ms": 1436,
+          "bytes": 2825144,
+          "outfile": "C:\\Users\\sirch\\Desktop\\ABRASAX_GOD_OS\\agents\\ABRASAX_SCRIPTS\\vlc\\streamout\\tmph42d67ie-amd_final_nvidia_enhanced.mp4",
+          "note": "NVIDIA decodes + scale_cuda 2x, AMD Vega performs the FINAL encode"
+        },
+        {
+          "label": "amd_final_libplacebo",
+          "ok": true,
+          "ms": 3386,
+          "bytes": 2688941,
+          "outfile": "C:\\Users\\sirch\\Desktop\\ABRASAX_GOD_OS\\agents\\ABRASAX_SCRIPTS\\vlc\\streamout\\tmph42d67ie-amd_final_libplacebo.mp4",
+          "note": "libplacebo upscale ON the Vega iGPU, AMD final encode"
+        },
+        {
+          "label": "amd_final_cpu_denoise",
+          "ok": true,
+          "ms": 600,
+          "bytes": 2439423,
+          "outfile": "C:\\Users\\sirch\\Desktop\\ABRASAX_GOD_OS\\agents\\ABRASAX_SCRIPTS\\vlc\\streamout\\tmph42d67ie-amd_final_cpu_denoise.mp4",
+          "note": "CPU hqdn3d denoise, AMD final encode (fastest full path)"
+        },
+        {
+          "label": "nvidia_reference",
+          "ok": true,
+          "ms": 954,
+          "bytes": 3382275,
+          "outfile": "C:\\Users\\sirch\\Desktop\\ABRASAX_GOD_OS\\agents\\ABRASAX_SCRIPTS\\vlc\\streamout\\tmph42d67ie-nvidia_reference.mp4",
+          "note": "all-NVIDIA reference: decode + scale_cuda + NVENC"
+        }
+      ],
+      "checks": [
+        {
+          "what": "video:amd_final_nvidia_enhanced",
+          "ok": true,
+          "detail": "2825144 bytes -> C:\\Users\\sirch\\Desktop\\ABRASAX_GOD_OS\\agents\\ABRASAX_SCRIPTS\\vlc\\streamout\\tmph42d67ie-amd_final_nvidia_enhanced.mp4"
+        },
+        {
+          "what": "video:amd_final_libplacebo",
+          "ok": true,
+          "detail": "2688941 bytes -> C:\\Users\\sirch\\Desktop\\ABRASAX_GOD_OS\\agents\\ABRASAX_SCRIPTS\\vlc\\streamout\\tmph42d67ie-amd_final_libplacebo.mp4"
+        },
+        {
+          "what": "video:amd_final_cpu_denoise",
+          "ok": true,
+          "detail": "2439423 bytes -> C:\\Users\\sirch\\Desktop\\ABRASAX_GOD_OS\\agents\\ABRASAX_SCRIPTS\\vlc\\streamout\\tmph42d67ie-amd_final_cpu_denoise.mp4"
+        },
+        {
+          "what": "video:nvidia_reference",
+          "ok": true,
+          "detail": "3382275 bytes -> C:\\Users\\sirch\\Desktop\\ABRASAX_GOD_OS\\agents\\ABRASAX_SCRIPTS\\vlc\\streamout\\tmph42d67ie-nvidia_reference.mp4"
+        },
+        {
+          "what": "nvcc:vlc_yuv_kernels.cubin",
+          "ok": false,
+          "detail": "vlc_yuv_kernels.cu\r\nc1xx: fatal error C1083: Cannot open source file: 'vlc_yuv_kernels.cu': No such file or directory\r\nC"
+        },
+        {
+          "what": "nvcc:vlc_yuv_kernels.ptx",
+          "ok": false,
+          "detail": "vlc_yuv_kernels.cu\r\nc1xx: fatal error C1083: Cannot open source file: 'vlc_yuv_kernels.cu': No such file or directory\r\nC"
+        },
+        {
+          "what": "nvcc:harness",
+          "ok": false,
+          "detail": "harness_vlc_yuv.cu\r\nc1xx: fatal error C1083: Cannot open source file: 'harness_vlc_yuv.cu': No such file or directory\r\nC"
+        },
+        {
+          "what": "rust:abrasax_7d_core",
+          "ok": true,
+          "detail": "282 ms"
+        },
+        {
+          "what": "rust:cuda_node",
+          "ok": true,
+          "detail": "517 ms"
+        }
+      ],
+      "gpu": {
+        "ok": true,
+        "devices": [
+          "Device 0 selected: NVIDIA GeForce GTX 1660 Ti (discrete) (0x2191)"
+        ]
+      },
+      "kernels": {
+        "ok": false,
+        "results": [
+          {
+            "label": "nvcc:vlc_yuv_kernels.cubin",
+            "ok": false,
+            "ms": 6119,
+            "out": "vlc_yuv_kernels.cu\r\nc1xx: fatal error C1083: Cannot open source file: 'vlc_yuv_kernels.cu': No such file or directory\r\nCommand failed: nvcc -arch=sm_75 -cubin vlc_yuv_kernels.cu -o vlc_yuv_kernels.cub"
+          },
+          {
+            "label": "nvcc:vlc_yuv_kernels.ptx",
+            "ok": false,
+            "ms": 4749,
+            "out": "vlc_yuv_kernels.cu\r\nc1xx: fatal error C1083: Cannot open source file: 'vlc_yuv_kernels.cu': No such file or directory\r\nCommand failed: nvcc -arch=sm_75 -ptx vlc_yuv_kernels.cu -o vlc_yuv_kernels.ptx\nc"
+          },
+          {
+            "label": "nvcc:harness",
+            "ok": false,
+            "ms": 4768,
+            "out": "harness_vlc_yuv.cu\r\nc1xx: fatal error C1083: Cannot open source file: 'harness_vlc_yuv.cu': No such file or directory\r\nCommand failed: nvcc -arch=sm_75 -O2 harness_vlc_yuv.cu -o vlc_yuv_test.exe\nc1xx:"
+          }
+        ],
+        "kernelRun": null
+      },
+      "rust": {
+        "ok": true,
+        "core": {
+          "ok": true,
+          "ms": 282,
+          "out": "warning: unused import: `std::ffi::c_void`\n  --> src\\lib.rs:18:5\n   |\n18 | use std::ffi::c_void;\n   |     ^^^^^^^^^^^^^^^^\n   |\n   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nwarning: `abrasax_7d_core` (lib) generated 1 warning (run `cargo fix --lib -p abrasax_7d_core` to apply 1 suggestion)\nwarning: fields `id`, `size_mb`, `offset_mb`, `model_type`, and `active` are never read\n  --> src\\vram_manager.rs:54:9\n   |\n53 | pub struct VramBlock {\n   |            --------- fields in this struct\n54 |     pub id: String,\n   |         ^^\n55 |     pub size_mb: u32,\n   |         ^^^^^^^\n56 |     pub offset_mb: u32,\n   |         ^^^^^^^^^\n57 |     pub model_type: String,\n   |         ^^^^^^^^^^\n58 |     pub active: bool,\n   |         ^^^^^^\n   |\n   = note: `VramBlock` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis\n   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default\n\nwarning: methods `can_load`, `allocate`, `deallocate`, `defragment`, and `allocation_summary` are never used\n   --> src\\vram_manager.rs:122:12\n    |\n 68 | impl VramManager {\n    | ---------------- methods in this implementation\n...\n122 |     pub fn can_load(&self, model_size_mb: u32) -> bool {\n    |            ^^^^^^^^\n...\n127 |     pub fn allocate(&mut self, id: &str, size_mb: u32, model_type: &str) -> Option<VramBlock> {\n    |            ^^^^^^^^\n...\n147 |     pub fn deallocate(&mut self, id: &str) {\n    |            ^^^^^^^^^^\n...\n156 |     pub fn defragment(&mut self) {\n    |            ^^^^^^^^^^\n...\n170 |     pub fn allocation_summary(&self) -> String {\n    |            ^^^^^^^^^^^^^^^^^^\n\nwarning: `abrasax_7d_core` (bin \"abrasax_7d_core\") generated 2 warnings\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s",
+          "label": "cargo:abrasax_7d_core"
+        },
+        "cudaNode": {
+          "ok": true,
+          "ms": 517
+        }
+      },
+      "ended": "2026-10-10 21:19:46"
+    },
+    {
+      "n": 1,
+      "started": "2026-10-10 21:20:25",
+      "videos": [
+        {
+          "label": "amd_final_nvidia_enhanced",
+          "ok": true,
+          "ms": 1115,
+          "bytes": 2825144,
+          "outfile": "C:\\Users\\sirch\\Desktop\\ABRASAX_GOD_OS\\agents\\ABRASAX_SCRIPTS\\vlc\\streamout\\tmph42d67ie-amd_final_nvidia_enhanced.mp4",
+          "note": "NVIDIA decodes + scale_cuda 2x, AMD Vega performs the FINAL encode"
+        },
+        {
+          "label": "amd_final_libplacebo",
+          "ok": true,
+          "ms": 3209,
+          "bytes": 2688941,
+          "outfile": "C:\\Users\\sirch\\Desktop\\ABRASAX_GOD_OS\\agents\\ABRASAX_SCRIPTS\\vlc\\streamout\\tmph42d67ie-amd_final_libplacebo.mp4",
+          "note": "libplacebo upscale ON the Vega iGPU, AMD final encode"
+        },
+        {
+          "label": "amd_final_cpu_denoise",
+          "ok": true,
+          "ms": 597,
+          "bytes": 2439423,
+          "outfile": "C:\\Users\\sirch\\Desktop\\ABRASAX_GOD_OS\\agents\\ABRASAX_SCRIPTS\\vlc\\streamout\\tmph42d67ie-amd_final_cpu_denoise.mp4",
+          "note": "CPU hqdn3d denoise, AMD final encode (fastest full path)"
+        },
+        {
+          "label": "nvidia_reference",
+          "ok": true,
+          "ms": 941,
+          "bytes": 3382275,
+          "outfile": "C:\\Users\\sirch\\Desktop\\ABRASAX_GOD_OS\\agents\\ABRASAX_SCRIPTS\\vlc\\streamout\\tmph42d67ie-nvidia_reference.mp4",
+          "note": "all-NVIDIA reference: decode + scale_cuda + NVENC"
+        }
+      ],
+      "checks": [
+        {
+          "what": "video:amd_final_nvidia_enhanced",
+          "ok": true,
+          "detail": "2825144 bytes -> C:\\Users\\sirch\\Desktop\\ABRASAX_GOD_OS\\agents\\ABRASAX_SCRIPTS\\vlc\\streamout\\tmph42d67ie-amd_final_nvidia_enhanced.mp4"
+        },
+        {
+          "what": "video:amd_final_libplacebo",
+          "ok": true,
+          "detail": "2688941 bytes -> C:\\Users\\sirch\\Desktop\\ABRASAX_GOD_OS\\agents\\ABRASAX_SCRIPTS\\vlc\\streamout\\tmph42d67ie-amd_final_libplacebo.mp4"
+        },
+        {
+          "what": "video:amd_final_cpu_denoise",
+          "ok": true,
+          "detail": "2439423 bytes -> C:\\Users\\sirch\\Desktop\\ABRASAX_GOD_OS\\agents\\ABRASAX_SCRIPTS\\vlc\\streamout\\tmph42d67ie-amd_final_cpu_denoise.mp4"
+        },
+        {
+          "what": "video:nvidia_reference",
+          "ok": true,
+          "detail": "3382275 bytes -> C:\\Users\\sirch\\Desktop\\ABRASAX_GOD_OS\\agents\\ABRASAX_SCRIPTS\\vlc\\streamout\\tmph42d67ie-nvidia_reference.mp4"
+        },
+        {
+          "what": "nvcc:vlc_yuv_kernels.cubin",
+          "ok": true,
+          "detail": "6241 ms"
+        },
+        {
+          "what": "nvcc:vlc_yuv_kernels.ptx",
+          "ok": true,
+          "detail": "5684 ms"
+        },
+        {
+          "what": "nvcc:harness",
+          "ok": true,
+          "detail": "8636 ms"
+        },
+        {
+          "what": "kernel:execute",
+          "ok": true,
+          "detail": "RESULT: PASS"
+        },
+        {
+          "what": "rust:abrasax_7d_core",
+          "ok": true,
+          "detail": "273 ms"
+        },
+        {
+          "what": "rust:cuda_node",
+          "ok": true,
+          "detail": "516 ms"
+        }
+      ],
+      "gpu": {
+        "ok": true,
+        "devices": [
+          "GPU listing:",
+          "Device 0 selected: NVIDIA GeForce GTX 1660 Ti (discrete) (0x2191)"
+        ]
+      },
+      "kernels": {
+        "ok": true,
+        "results": [
+          {
+            "label": "nvcc:vlc_yuv_kernels.cubin",
+            "ok": true,
+            "ms": 6241,
+            "out": "vlc_yuv_kernels.cu(144): warning #550-D: variable \"uv_offset\" was set but never used\r\n          int uv_offset = imgwidth * imgheight\r\n              ^\r\n\r\nRemark: The warnings can be suppressed with \"-d"
+          },
+          {
+            "label": "nvcc:vlc_yuv_kernels.ptx",
+            "ok": true,
+            "ms": 5684,
+            "out": "vlc_yuv_kernels.cu(144): warning #550-D: variable \"uv_offset\" was set but never used\r\n          int uv_offset = imgwidth * imgheight\r\n              ^\r\n\r\nRemark: The warnings can be suppressed with \"-d"
+          },
+          {
+            "label": "nvcc:harness",
+            "ok": true,
+            "ms": 8636,
+            "out": "C:\\Users\\sirch\\Desktop\\ABRASAX_GOD_OS\\build\\cuda_kernels_hermes\\vlc_yuv_kernels.cu(144): warning #550-D: variable \"uv_offset\" was set but never used\r\n          int uv_offset = imgwidth * imgheight\r\n  "
+          }
+        ],
+        "kernelRun": {
+          "ok": true,
+          "ms": 704,
+          "out": "DEVICE: NVIDIA GeForce GTX 1660 Ti  sm_75  SMs=24\r\n\r\n[1] nv12_to_rgb_709limited vs CPU reference : EXACT MATCH  (mismatches=0, max diff=0)\r\n[2] full-range(buggy) vs range-aware, on legal BT.709 signal:\r\n      differing bytes: 17742851 / 24883200 (71.3%), mean abs delta 8.32, max delta 20\r\n[3] tiled vs untiled NV12->RGB : IDENTICAL (bytes differing by >1 = 0)\r\n\r\n[4] 4K (3840x2160) NV12->RGB8 bandwidth\r\n      untiled : 0.346 ms  -> 107.78 GB/s\r\n      tiled   : 0.538 ms  -> 69.33 GB/s  (0.64x)\r\n\r\nRESULT: PASS",
+          "label": "run:vlc_yuv_test"
+        }
+      },
+      "rust": {
+        "ok": true,
+        "core": {
+          "ok": true,
+          "ms": 273,
+          "out": "warning: unused import: `std::ffi::c_void`\n  --> src\\lib.rs:18:5\n   |\n18 | use std::ffi::c_void;\n   |     ^^^^^^^^^^^^^^^^\n   |\n   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nwarning: `abrasax_7d_core` (lib) generated 1 warning (run `cargo fix --lib -p abrasax_7d_core` to apply 1 suggestion)\nwarning: fields `id`, `size_mb`, `offset_mb`, `model_type`, and `active` are never read\n  --> src\\vram_manager.rs:54:9\n   |\n53 | pub struct VramBlock {\n   |            --------- fields in this struct\n54 |     pub id: String,\n   |         ^^\n55 |     pub size_mb: u32,\n   |         ^^^^^^^\n56 |     pub offset_mb: u32,\n   |         ^^^^^^^^^\n57 |     pub model_type: String,\n   |         ^^^^^^^^^^\n58 |     pub active: bool,\n   |         ^^^^^^\n   |\n   = note: `VramBlock` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis\n   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default\n\nwarning: methods `can_load`, `allocate`, `deallocate`, `defragment`, and `allocation_summary` are never used\n   --> src\\vram_manager.rs:122:12\n    |\n 68 | impl VramManager {\n    | ---------------- methods in this implementation\n...\n122 |     pub fn can_load(&self, model_size_mb: u32) -> bool {\n    |            ^^^^^^^^\n...\n127 |     pub fn allocate(&mut self, id: &str, size_mb: u32, model_type: &str) -> Option<VramBlock> {\n    |            ^^^^^^^^\n...\n147 |     pub fn deallocate(&mut self, id: &str) {\n    |            ^^^^^^^^^^\n...\n156 |     pub fn defragment(&mut self) {\n    |            ^^^^^^^^^^\n...\n170 |     pub fn allocation_summary(&self) -> String {\n    |            ^^^^^^^^^^^^^^^^^^\n\nwarning: `abrasax_7d_core` (bin \"abrasax_7d_core\") generated 2 warnings\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s",
+          "label": "cargo:abrasax_7d_core"
+        },
+        "cudaNode": {
+          "ok": true,
+          "ms": 516
+        }
+      },
+      "ended": "2026-10-10 21:20:55"
+    }
+  ]
+}

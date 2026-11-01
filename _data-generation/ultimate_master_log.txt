@@ -1,0 +1,53 @@
+[17:27:33] ULTIMATE: ═══ ABRASAX ULTIMATE MASTER BOOT | HEX: 4f5349524953424c58434b | φ: 1.618033988749895 ═══
+[17:29:19] ULTIMATE: --- Iteration 1 ---
+[17:29:24] ULTIMATE: ═══ ABRASAX ULTIMATE MASTER BOOT | HEX: 4f5349524953424c58434b | φ: 1.618033988749895 ═══
+[17:55:40] ULTIMATE: ═══ ABRASAX ULTIMATE MASTER BOOT | HEX: 4f5349524953424c58434b | φ: 1.618033988749895 ═══
+[17:57:00] ULTIMATE: --- Iteration 1 ---
+[17:57:11] ULTIMATE: API error, retry in 5s
+[17:57:16] ULTIMATE: --- Iteration 2 ---
+[17:59:47] ULTIMATE: API error, retry in 5s
+[17:59:52] ULTIMATE: --- Iteration 3 ---
+[17:59:56] ULTIMATE: API error, retry in 5s
+[18:00:01] ULTIMATE: --- Iteration 4 ---
+[18:00:05] ULTIMATE: API error, retry in 5s
+[18:00:10] ULTIMATE: --- Iteration 5 ---
+[18:00:14] ULTIMATE: API error, retry in 5s
+[18:00:19] ULTIMATE: --- Iteration 6 ---
+[18:00:23] ULTIMATE: API error, retry in 5s
+[18:00:28] ULTIMATE: --- Iteration 7 ---
+[18:00:32] ULTIMATE: API error, retry in 5s
+[18:00:37] ULTIMATE: --- Iteration 8 ---
+[18:00:41] ULTIMATE: API error, retry in 5s
+[18:00:46] ULTIMATE: --- Iteration 9 ---
+[18:00:50] ULTIMATE: API error, retry in 5s
+[18:00:55] ULTIMATE: --- Iteration 10 ---
+[18:00:59] ULTIMATE: API error, retry in 5s
+[18:01:04] ULTIMATE: --- Iteration 11 ---
+[18:01:08] ULTIMATE: API error, retry in 5s
+[18:01:13] ULTIMATE: --- Iteration 12 ---
+[18:01:17] ULTIMATE: API error, retry in 5s
+[18:01:22] ULTIMATE: --- Iteration 13 ---
+[18:01:26] ULTIMATE: API error, retry in 5s
+[18:01:31] ULTIMATE: --- Iteration 14 ---
+[18:01:36] ULTIMATE: API error, retry in 5s
+[18:01:41] ULTIMATE: --- Iteration 15 ---
+[18:01:45] ULTIMATE: API error, retry in 5s
+[18:01:50] ULTIMATE: --- Iteration 16 ---
+[18:01:54] ULTIMATE: API error, retry in 5s
+[18:01:59] ULTIMATE: --- Iteration 17 ---
+[18:02:03] ULTIMATE: API error, retry in 5s
+[18:02:08] ULTIMATE: --- Iteration 18 ---
+[18:02:12] ULTIMATE: API error, retry in 5s
+[18:02:17] ULTIMATE: --- Iteration 19 ---
+[18:02:21] ULTIMATE: API error, retry in 5s
+[18:02:26] ULTIMATE: --- Iteration 20 ---
+[18:02:30] ULTIMATE: API error, retry in 5s
+[18:02:35] ULTIMATE: --- Iteration 21 ---
+[18:02:39] ULTIMATE: API error, retry in 5s
+[18:02:44] ULTIMATE: --- Iteration 22 ---
+[18:02:48] ULTIMATE: API error, retry in 5s
+[18:02:53] ULTIMATE: --- Iteration 23 ---
+[18:04:22] ULTIMATE: API error, retry in 5s
+[18:04:27] ULTIMATE: --- Iteration 24 ---
+[18:04:31] ULTIMATE: API error, retry in 5s
+[18:04:36] ULTIMATE: --- Iteration 25 ---

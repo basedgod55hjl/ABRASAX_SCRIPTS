@@ -1,0 +1,13 @@
+# OSIRISBLXCK gitignore
+*.pyc
+__pycache__/
+*.log
+*.bak
+*.broken
+.vscode/
+node_modules/
+.env
+*.tmp
+Thumbs.db
+*.ps1.tmp
+.vlc/
