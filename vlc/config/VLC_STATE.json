@@ -1,0 +1,38 @@
+{
+  "version": "v12 CRASH-PROOF",
+  "date": "2026-06-12",
+  "primalHex": "4f5349524953424c58434b",
+  "phi": 1.618033988749895,
+  "identity": "OSIRISBLXCK",
+  "flags": {
+    "avcodec-hw": "any",
+    "avcodec-dr": true,
+    "avcodec-threads": 0,
+    "avcodec-hurry-up": true,
+    "avcodec-skip-frame": 1,
+    "avcodec-skip-idct": 1,
+    "avcodec-error-resilience": 1,
+    "avcodec-workaround-bugs": 1,
+    "avcodec-corrupted": true,
+    "vout": "direct3d11",
+    "d3d11-upscale-mode": "super",
+    "d3d11-hdr-mode": "auto",
+    "d3d11-hw-blending": true,
+    "no-dvdnav": true,
+    "prefetch-buffer-size": 65536,
+    "prefetch-read-size": 33554432,
+    "prefetch-seek-threshold": 16777216,
+    "clock-synchro": 0,
+    "file-caching": 2000,
+    "network-caching": 3000,
+    "playlist-autostart": true,
+    "loop": true
+  },
+  "playlist": "ehgeh.xspf",
+  "tracks": 1673,
+  "gpu": "NVIDIA GTX 1660 Ti → AMD Radeon iGPU",
+  "registry": {
+    "HKCU": "GpuPreference=2",
+    "HKLM": "GpuPreference=2"
+  }
+}

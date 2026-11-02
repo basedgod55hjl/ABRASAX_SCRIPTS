@@ -1,0 +1,60 @@
+{
+  "hex": "4f5349524953424c58434b",
+  "phi": 1.618033988749895,
+  "components": [
+    {
+      "file": "archive/j_drive_migrated/navida_abrasax/launch_vlc_nexus.ps1",
+      "kind": "script",
+      "sha256": "9e44c7c4a2e66c979738ac68d3e1dff43a0fbe5e94fba8b91f16b191758b13aa",
+      "bytes": 3822
+    },
+    {
+      "file": "research/system32_wire.py",
+      "kind": "module",
+      "sha256": "33c6cb1dcfb89597f997eef5116e8d78a42462193cf8966e6175098b4a5aa801",
+      "bytes": 39022
+    },
+    {
+      "file": "tools/dsv4_chat.py",
+      "kind": "module",
+      "sha256": "83a440458407d9b79ae95efbaaed85d710bbb9d3f4128bd38585eb96c726cdfe",
+      "bytes": 41868
+    },
+    {
+      "file": "tools/loki_tool_bridge.py",
+      "kind": "module",
+      "sha256": "4e8c69470b66a4a21616aabcd18f64c57aa6abd5227faa89d7833cd0ac835b00",
+      "bytes": 46711
+    },
+    {
+      "file": "tools/hexforge.py",
+      "kind": "module",
+      "sha256": "67dba45119d20c9f00a602352a52cf538881e5769d292abf9101e5cb3d31a467",
+      "bytes": 27605
+    },
+    {
+      "file": "tools/loki_runner.py",
+      "kind": "module",
+      "sha256": "8beaa100b537b18ae4c5196544dbcb654414ced9ec13ceb2948e5e70748048ea",
+      "bytes": 4789
+    },
+    {
+      "file": "tools/self_build.py",
+      "kind": "module",
+      "sha256": "a413b4036e3eab47a9e4a953c5478b133848ea52c3edfd54ce672bb194349e08",
+      "bytes": 6697
+    },
+    {
+      "file": "f_bridge.ts",
+      "kind": "script",
+      "sha256": "7d8e9aaf9f0337da5bd0410491f56de31b6e8bb247fac8dfe57da649c7e8f577",
+      "bytes": 4179
+    },
+    {
+      "file": "python-ai-tooling-2026-research.md",
+      "kind": "data",
+      "sha256": "331cd1d08e2f249fb9e87f0e64497b19584f2f704a6483572593c33ebe311e77",
+      "bytes": 16810
+    }
+  ]
+}
