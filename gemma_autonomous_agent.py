@@ -18,7 +18,7 @@ from datetime import datetime
 # CONFIG
 # ═══════════════════════════════════════════════════════════════
 LM_STUDIO = "http://localhost:1234"
-MODEL = "gemma-4-e4b-uncensored-hauhaucs-aggressive"
+MODEL = "gemma-4-e2b-uncensored-hauhaucs-aggressive"
 EMBED_MODEL = "text-embedding-nomic-embed-text-v1.5"
 VLC_DIR = r"C:\Program Files\VideoLAN\VLC"
 DESKTOP_VLC = r"C:\Users\sirch\Desktop\ABRASAX\repos\ABRASAX_SCRIPTS\vlc"

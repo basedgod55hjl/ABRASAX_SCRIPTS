@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 LM = 'http://localhost:1234'
-MODEL = 'gemma-4-e4b-uncensored-hauhaucs-aggressive'
+MODEL = 'gemma-4-e2b-uncensored-hauhaucs-aggressive'
 SCRIPTS = Path(r'C:\Users\sirch\Desktop\ABRASAX\repos\ABRASAX_SCRIPTS')
 ABRASAX = Path(r'C:\Users\sirch\Desktop\ABRASAX')
 SELF = Path(__file__)

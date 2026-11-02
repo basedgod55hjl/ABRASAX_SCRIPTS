@@ -43,7 +43,7 @@ for line in report.split('\n'):
 print()
 status_line = "DISCONNECTED"
 if lm_running and server_up:
-    status_line = "CONNECTED (via LM Studio + gemma-4-e4b-uncensored-hauhaucs-aggressive)"
+    status_line = "CONNECTED (via LM Studio + gemma-4-e2b-uncensored-hauhaucs-aggressive)"
 print(f"  [{status_line}] LLM Inference Engine (LM Studio server)")
 print()
 

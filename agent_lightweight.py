@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 LM_STUDIO = "http://localhost:1234"
-MODEL = "gemma-4-e4b-uncensored-hauhaucs-aggressive"
+MODEL = "gemma-4-e2b-uncensored-hauhaucs-aggressive"
 SCRIPTS_DIR = r"C:\Users\sirch\Desktop\ABRASAX\repos\ABRASAX_SCRIPTS"
 ABRASAX_DESKTOP = r"C:\Users\sirch\Desktop\ABRASAX"
 ABRASAX_MAIN = r"C:\Users\sirch\Desktop\ABRASAX"

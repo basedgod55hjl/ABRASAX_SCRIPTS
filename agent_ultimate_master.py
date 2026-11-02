@@ -18,7 +18,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ═══════════════════════════════════════════════════════
 LM_STUDIO = "http://localhost:1234"
-MODEL = "gemma-4-e4b-uncensored-hauhaucs-aggressive"
+MODEL = "gemma-4-e2b-uncensored-hauhaucs-aggressive"
 EMBED_MODEL = "text-embedding-nomic-embed-text-v1.5"
 SCRIPTS_DIR = r"C:\Users\sirch\Desktop\ABRASAX\repos\ABRASAX_SCRIPTS"
 ABRASAX_DESKTOP = r"C:\Users\sirch\Desktop\ABRASAX"

@@ -7,7 +7,7 @@ import urllib.request, json, time, subprocess, os, re
 from datetime import datetime
 
 LM = 'http://localhost:1234'
-MODEL = 'gemma-4-e4b-uncensored-hauhaucs-aggressive'
+MODEL = 'gemma-4-e2b-uncensored-hauhaucs-aggressive'
 
 def log(msg):
     print(f'[{datetime.now():%H:%M:%S}] {msg}')
