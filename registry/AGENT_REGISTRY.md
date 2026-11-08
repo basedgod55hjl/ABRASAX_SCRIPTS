@@ -1,12 +1,13 @@
 # ABRAXAS AGENT_REGISTRY
 
-generated 2026-11-08T07:54:42 - 14/14 agents running
+generated 2026-11-08T08:04:06 - 15/15 agents running
 
 | agent | port | status | supervisor | role | model |
 |---|---|---|---|---|---|
 | neotron-gateway | 2645 | running | wake_all (neotron) | chat router: NVIDIA/DeepSeek/local + Kairos identity | routes: nvidia/nemotron-550b, deepseek-flash, local/* |
 | node-agent-hub | 8811 | running | kairos_services | parallel agent fan-out (jobs) | - |
 | telegram-bot | 8798 | running | kairos_services | Telegram bridge @botABRASAXbot | gemma-4-e2b via gateway :2645 |
+| ui-web | 8090 | running | kairos_services | web chat UI (Flask) proxying the gateway | gemma-4-e2b via gateway :2645 |
 | entangle-bridge | - | running | wake_all | F1/F2/F3/NEO phi-coupling, writes memory/f_entanglement_state.json | - |
 | neo-ton-pulse | - | running | wake_all | transformer pulse + TON masterchain anchor | - |
 | triune-mind | 9628 | running | wake_all | reflection loop (reasoning_content-aware) | - |

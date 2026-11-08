@@ -21,6 +21,9 @@ CATALOG = [
     {"name": "telegram-bot", "port": 8798, "script": "SYSTEMS/telegram/abrasax_tg_bot.py",
      "supervisor": "kairos_services", "role": "Telegram bridge @botABRASAXbot",
      "model": "gemma-4-e2b via gateway :2645"},
+    {"name": "ui-web", "port": 8090, "script": "UI/abrasax-ui/web/chat/serve_chat.py",
+     "supervisor": "kairos_services", "role": "web chat UI (Flask) proxying the gateway",
+     "model": "gemma-4-e2b via gateway :2645"},
     {"name": "entangle-bridge", "port": None, "script": "ENGINE/abrasax_engine/_3NODE_F_LOGIC_ENTANGLE.py",
      "supervisor": "wake_all", "role": "F1/F2/F3/NEO phi-coupling, writes memory/f_entanglement_state.json"},
     {"name": "neo-ton-pulse", "port": None, "script": "ENGINE/abrasax_engine/_NEO_TON_PULSE.py",
@@ -56,7 +59,7 @@ def main():
     try:
         for line in ps_cmd(
             "Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | "
-            "Where-Object {$_.LocalPort -in 1234,1235,1236,2645,4200,8811,8798,9628} | "
+            "Where-Object {$_.LocalPort -in 1234,1235,1236,2645,4200,8090,8811,8798,9628} | "
             "ForEach-Object {$_.LocalPort}"
         ).splitlines():
             if line.strip().isdigit():

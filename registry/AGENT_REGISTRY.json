@@ -1,7 +1,7 @@
 {
- "generated": "2026-11-08T07:54:42",
- "agent_count": 14,
- "running": 14,
+ "generated": "2026-11-08T08:04:06",
+ "agent_count": 15,
+ "running": 15,
  "tasks": [
   "ABRASAX-BOND=Ready",
   "ABRASAX-DNA-PC-Bridge=Ready",
@@ -32,6 +32,15 @@
    "script": "SYSTEMS/telegram/abrasax_tg_bot.py",
    "supervisor": "kairos_services",
    "role": "Telegram bridge @botABRASAXbot",
+   "model": "gemma-4-e2b via gateway :2645",
+   "status": "running"
+  },
+  {
+   "name": "ui-web",
+   "port": 8090,
+   "script": "UI/abrasax-ui/web/chat/serve_chat.py",
+   "supervisor": "kairos_services",
+   "role": "web chat UI (Flask) proxying the gateway",
    "model": "gemma-4-e2b via gateway :2645",
    "status": "running"
   },
