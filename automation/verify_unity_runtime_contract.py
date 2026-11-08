@@ -1,0 +1,139 @@
+"""Check whether the Unity build can actually reach the renderer at runtime.
+
+Unity compiled FloatingBrainRenderer.cs (verified by reading Assembly-CSharp.dll's
+metadata heap). But compiling proves the code parses, not that the endpoint the
+class hardcodes is reachable and correct.
+
+This extracts the real contract from the compiled assembly AND the source, then
+hits the endpoint the way the C# client would, so a wrong port or path is caught
+without needing Play mode.
+
+Checks:
+  1. baseUrl string present in Assembly-CSharp.dll matches what :9700 serves
+  2. /frame.png responds with a PNG the C# decoder can parse
+     (8-bit RGBA, colour type 6, IHDR..IEND, stored deflate, filter-0 rows)
+  3. /telemetry.json has exactly the keys RenderTelemetry deserialises
+  4. the POST /step endpoint the client calls on 9626 answers
+
+Exit 0 = the compiled client's contract holds against the live services.
+"""
+import json
+import struct
+import sys
+import urllib.request
+import zlib
+
+# Paths come from one resolver so a script cannot open the wrong tree.
+sys.path.insert(0, r"C:\ABRASAX\SCRIPTS\automation")
+from abra_paths import paths  # noqa: E402
+
+DLL = str(paths.unity_dll)
+# must be a FILE, not the Scripts directory
+SRC = str(paths.unity_scripts / "FloatingBrainRenderer.cs")
+
+ok = True
+
+# ---- 1. the URL baked into the assembly --------------------------------
+dll = open(DLL, "rb").read()
+# .NET stores string literals in the #US heap as UTF-16LE, not ASCII. Searching for
+# ASCII bytes here produced a false FAIL once already -- see probe_dll_literal.py.
+target = "http://127.0.0.1:9700"
+has_url = target.encode("utf-16-le") in dll
+print(f"[{'PASS' if has_url else 'FAIL'}] baseUrl literal present in Assembly-CSharp.dll "
+      f"(utf-16le; ascii would be a false negative)")
+ok &= has_url
+
+src = open(SRC, encoding="utf-8").read()
+print(f"[PASS] source declares baseUrl = http://127.0.0.1:9700"
+      if '"http://127.0.0.1:9700"' in src else "[FAIL] source baseUrl changed")
+
+# ---- 2. frame.png contract --------------------------------------------
+try:
+    with urllib.request.urlopen(
+            "http://127.0.0.1:9700/frame.png?clock=1.0&exposure=24&yaw=0&pitch=0",
+            timeout=15) as r:
+        png = r.read()
+        ctype = r.headers.get("Content-Type", "")
+    print(f"\nframe.png    : {len(png):,} bytes  Content-Type={ctype}")
+
+    check = png[:8] == b"\x89PNG\r\n\x1a\n"
+    print(f"[{'PASS' if check else 'FAIL'}] PNG signature")
+    ok &= check
+
+    i, idat, ihdr = 8, b"", None
+    order = []
+    while i < len(png):
+        ln = struct.unpack(">I", png[i:i + 4])[0]
+        typ = png[i + 4:i + 8]
+        order.append(typ.decode("ascii", "replace"))
+        if typ == b"IHDR":
+            ihdr = png[i + 8:i + 8 + ln]
+        elif typ == b"IDAT":
+            idat += png[i + 8:i + 8 + ln]
+        i += 12 + ln
+
+    w, h, depth, ctype_i = struct.unpack(">IIBB", ihdr[:10])
+    check = depth == 8 and ctype_i == 6
+    print(f"[{'PASS' if check else 'FAIL'}] 8-bit RGBA (type 6) -- {w}x{h} depth={depth} type={ctype_i}")
+    ok &= check
+
+    check = order[0] == "IHDR" and order[-1] == "IEND"
+    print(f"[{'PASS' if check else 'FAIL'}] chunk order {' '.join(order)}")
+    ok &= check
+
+    btype = (idat[2] >> 1) & 0x03
+    check = btype == 0
+    print(f"[{'PASS' if check else 'FAIL'}] deflate btype={btype} (decoder supports stored only)")
+    ok &= check
+
+    raw = zlib.decompress(idat)
+    stride = 1 + w * 4
+    filters = {raw[y * stride] for y in range(h)}
+    check = filters == {0}
+    print(f"[{'PASS' if check else 'FAIL'}] every scanline filter 0 (got {sorted(filters)})")
+    ok &= check
+except Exception as e:  # noqa: BLE001
+    print(f"[FAIL] frame.png: {type(e).__name__}: {e}")
+    ok = False
+
+# ---- 3. telemetry keys the C# struct needs -----------------------------
+print()
+try:
+    with urllib.request.urlopen("http://127.0.0.1:9700/telemetry.json?clock=0", timeout=10) as r:
+        tel = json.loads(r.read().decode())
+
+    # These are the fields RenderTelemetry declares.
+    required = ["gpu", "live", "steps", "defects_pos", "defects_neg",
+                "mean_glow", "locked_frac", "mean_radius", "clock_s"]
+    missing = [k for k in required if k not in tel]
+    check = not missing
+    print(f"[{'PASS' if check else 'FAIL'}] all 9 RenderTelemetry keys present"
+          + (f" missing={missing}" if missing else ""))
+    ok &= check
+
+    types_ok = (isinstance(tel["gpu"], str) and isinstance(tel["live"], bool)
+                and isinstance(tel["steps"], int))
+    print(f"[{'PASS' if types_ok else 'FAIL'}] gpu:str live:bool steps:int")
+    ok &= types_ok
+except Exception as e:  # noqa: BLE001
+    print(f"[FAIL] telemetry: {type(e).__name__}: {e}")
+    ok = False
+
+# ---- 4. the POST /step the client issues ------------------------------
+print()
+try:
+    body = json.dumps({"n": 1, "learn": False}).encode()
+    req = urllib.request.Request("http://127.0.0.1:9626/step", data=body,
+                                 headers={"Content-Type": "application/json"},
+                                 method="POST")
+    with urllib.request.urlopen(req, timeout=10) as r:
+        status = r.status
+    check = 200 <= status < 300
+    print(f"[{'PASS' if check else 'FAIL'}] POST :9626/step -> {status} (StepBrain path)")
+    ok &= check
+except Exception as e:  # noqa: BLE001
+    print(f"[FAIL] POST :9626/step: {type(e).__name__}: {e}")
+    ok = False
+
+print("\nRESULT:", "PASS -- compiled Unity client's contract holds live" if ok else "FAIL")
+sys.exit(0 if ok else 1)

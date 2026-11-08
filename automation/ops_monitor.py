@@ -1,0 +1,402 @@
+"""ABRASAX ops monitor — 30 s production watch loop.
+
+Per tick:
+  1. probe every catalogued service (parallel TCP)
+  2. heartbeat freshness for supervisor + build loop
+  3. process-uniqueness check (duplicate supervisor/buildloop/gateway = defect)
+  4. host telemetry: GPU (nvidia-smi) + free space on C:
+  5. build-queue depth + build-loop error streak from the ledger
+  6. stable "signature" of everything unhealthy -> LOGS/ops-alerts.jsonl on change only
+  7. self-heal: restart supervisor / build loop when their heartbeat goes stale
+     (services themselves are the supervisor's job, never started twice from here)
+  8. rewrite LOGS/ops-state.json, append LOGS/ops-ledger.jsonl, touch heartbeat
+
+Usage:
+    python ops_monitor.py                 # resident, 30 s ticks
+    python ops_monitor.py --once          # one tick, print the state JSON
+    python ops_monitor.py --once --json   # machine-readable only
+    python ops_monitor.py --interval 30 --dry-run
+"""
+from __future__ import annotations
+
+import argparse
+import ctypes
+import datetime as dt
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path("C:/ABRASAX")
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from abrasax import services  # noqa: E402
+
+# gpu() must not flash a console window every 30 s (ops_monitor runs under
+# pythonw), so it calls subprocess.run with CREATE_NO_WINDOW. Measured
+# 2026-11-01: the old code called winproc.run — winproc was never imported
+# (NameError) and has no run() anyway; GPU telemetry was dead.
+
+LOGS = ROOT / "LOGS"
+STATE = LOGS / "ops-state.json"
+LEDGER = LOGS / "ops-ledger.jsonl"
+ALERTS = LOGS / "ops-alerts.jsonl"
+HEARTBEAT = LOGS / "ops-heartbeat.txt"
+PIDFILE = LOGS / "ops_monitor.pid"
+SUP_HEARTBEAT = LOGS / "supervisor-heartbeat.txt"
+LOOP_HEARTBEAT = LOGS / "build-loop-heartbeat.txt"
+LOOP_LEDGER = LOGS / "build-loop-ledger.jsonl"
+QUEUE = LOGS / "build-queue.jsonl"
+PYTHONW = ROOT / "PYTHON" / ".venv_gui" / "Scripts" / "pythonw.exe"
+PYTHON = ROOT / "PYTHON" / ".venv_gui" / "Scripts" / "python.exe"
+SUPERVISOR = ROOT / "SCRIPTS" / "automation" / "supervisor.py"
+
+SUP_STALE_S = 90
+LOOP_STALE_S = 180
+DISK_MIN_GB = 5.0
+GPU_TEMP_MAX = 85
+PID_RE = "abrasax|filetool|routerfail|supervisor.py|buildloop"
+
+
+def now() -> str:
+    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def pid_alive(pid: int) -> bool:
+    try:
+        handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)
+        if not handle:
+            return False
+        ctypes.windll.kernel32.CloseHandle(handle)
+        return True
+    except Exception:
+        return False
+
+
+def age_s(path: Path) -> float | None:
+    try:
+        return round(time.time() - path.stat().st_mtime, 1)
+    except OSError:
+        return None
+
+
+def proc_table() -> list[dict]:
+    """cmdline + pid for python/node processes that look like ABRASAX runtime bits."""
+    ps = (
+        "Get-CimInstance Win32_Process | Where-Object { $_.Name -match '^(python|pythonw|node)' } | "
+        "ForEach-Object { '{0}|{1}|{2}' -f $_.ProcessId, $_.Name, ($_.CommandLine -replace '\\s+',' ') }"
+    )
+    try:
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps],
+            capture_output=True, text=True, timeout=25,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        ).stdout
+    except Exception:
+        return []
+    rows = []
+    for line in out.splitlines():
+        line = line.strip()
+        if not line or line.count("|") < 2:
+            continue
+        pid, name, cmd = line.split("|", 2)
+        if not pid.isdigit():
+            continue
+        if "ops_monitor" in cmd or "Get-CimInstance" in cmd:
+            continue
+        rows.append({"pid": int(pid), "name": name, "cmd": cmd})
+    return rows
+
+
+def classify_procs(rows: list[dict]) -> dict:
+    """Count *logical* processes.
+
+    A venv pythonw.exe on this host re-execs the base interpreter as a child, so one
+    logical service shows up as two OS processes with the same command. Dedupe by a
+    normalized command signature instead of by PID.
+    """
+    import re
+    seen: set[str] = set()
+    for r in rows:
+        c = r["cmd"]
+        m = re.search(r"-m\s+abrasax\s+(\w+)", c)
+        if m:
+            sig = f"-m abrasax {m.group(1)}"
+        elif "supervisor.py" in c:
+            sig = "supervisor.py"
+        elif "buildloop" in c:
+            sig = "buildloop"
+        else:
+            sig = c
+        key = next((k for k in ("supervisor.py", "buildloop", "-m abrasax gateway") if k in sig), None)
+        if key:
+            seen.add(key)
+    return {
+        "supervisor": 1 if "supervisor.py" in seen else 0,
+        "buildloop": 1 if "buildloop" in seen else 0,
+        "gateway": 1 if "-m abrasax gateway" in seen else 0,
+    }
+
+
+def gpu() -> dict:
+    q = "name,memory.total,memory.used,utilization.gpu,temperature.gpu"
+    try:
+        out = subprocess.run(
+            ["nvidia-smi", f"--query-gpu={q}", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=15,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        ).stdout.strip()
+        if not out:
+            return {"ok": False}
+        name, total, used, util, temp = [p.strip() for p in out.splitlines()[0].split(",")]
+        return {
+            "ok": True, "name": name,
+            "vram_total_mb": int(float(total)), "vram_used_mb": int(float(used)),
+            "util_pct": int(float(util)), "temp_c": int(float(temp)),
+        }
+    except Exception as exc:
+        return {"ok": False, "error": exc.__class__.__name__}
+
+
+def disk() -> dict:
+    try:
+        u = shutil.disk_usage("C:/")
+        return {"free_gb": round(u.free / 1e9, 2), "used_pct": round(u.used / u.total * 100, 1)}
+    except Exception:
+        return {"free_gb": None, "used_pct": None}
+
+
+def queue_depth() -> int:
+    try:
+        return sum(1 for ln in QUEUE.read_text(encoding="utf-8", errors="ignore").splitlines() if ln.strip())
+    except OSError:
+        return 0
+
+
+def loop_errors() -> dict:
+    tail: list[dict] = []
+    try:
+        for ln in LOOP_LEDGER.read_text(encoding="utf-8", errors="ignore").splitlines()[-40:]:
+            try:
+                tail.append(json.loads(ln))
+            except Exception:
+                pass
+    except OSError:
+        pass
+    streak = 0
+    for ev in reversed(tail):
+        if ev.get("event") != "cycle":
+            continue
+        if ev.get("error") or ev.get("results") and any(
+            isinstance(r, dict) and r.get("ok") is False for r in ev["results"]
+        ):
+            streak += 1
+        else:
+            break
+    last = tail[-1] if tail else {}
+    return {"error_streak": streak, "last_cycle_n": last.get("n"), "last_ts": last.get("ts")}
+
+
+def start(path: Path, args: list[str], settle_s: float = 5.0) -> str:
+    """Spawn a detached child and verify it SURVIVED.
+
+    Popen hands back a pid even when the child dies instantly, so reporting
+    "started pid=N" without checking is how a dead supervisor got recorded as a
+    successful heal. We wait and require the process to still exist.
+    """
+    flags = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+    try:
+        p = subprocess.Popen(
+            [str(path), *args], cwd=str(ROOT), stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            creationflags=flags, close_fds=True,
+        )
+    except Exception as exc:
+        return f"start failed: {exc.__class__.__name__}: {exc}"
+
+    # give the interpreter time to fault on a bad import before we believe it.
+    # Measured cold Python startup on this host is ~2.8 s, so 3 s was too tight.
+    deadline = time.time() + settle_s
+    while time.time() < deadline:
+        rc = p.poll()
+        if rc is not None:
+            return f"start FAILED pid={p.pid} exited rc={rc}"
+        time.sleep(0.2)
+
+    if p.poll() is not None:
+        return f"start FAILED pid={p.pid} exited rc={p.returncode}"
+    return f"started pid={p.pid} (verified alive)"
+
+
+# ---------------------------------------------------------------------------
+# "absent" is an install fact; "down" is an incident
+# ---------------------------------------------------------------------------
+def _entry_path(spec: dict) -> Path | None:
+    entry = spec.get("entry")
+    if not entry:
+        return None
+    p = Path(str(entry))
+    return p if p.is_absolute() else ROOT / p
+
+
+def classify_down(probed: list[dict], down: list[str]) -> tuple[list[str], list[str]]:
+    """Split ``down`` into (absent, really-down).
+
+    An entry path that does not exist cannot be started by any retry, so it must
+    not be counted as a critical outage - that is how a permanent red signature
+    trains the operator to ignore the board.
+    """
+    by_id = {s["id"]: s for s in probed}
+    absent = [sid for sid in down
+              if (p := _entry_path(by_id.get(sid) or {})) is not None
+              and not p.exists()]
+    return absent, [sid for sid in down if sid not in absent]
+
+
+def optional_ids(probed: list[dict]) -> set[str]:
+    """The catalog's own ``optional`` flag, plus rows that are never production."""
+    return ({s["id"] for s in probed if s.get("optional")}
+            | {"codec-gateway", "vlc-7d-sampler", "gateway"})
+
+def snapshot(dry_run: bool = False) -> dict:
+    svc = services.health(timeout=0.6, include_daemons=True)
+    probed = [s for s in svc if s.get("port")]
+    down = [s["id"] for s in probed if not s.get("up")]
+    procs = classify_procs(proc_table())
+    sup_age = age_s(SUP_HEARTBEAT)
+    loop_age = age_s(LOOP_HEARTBEAT)
+    heal: list[str] = []
+    if not dry_run:
+        if sup_age is None or sup_age > SUP_STALE_S:
+            heal.append("supervisor " + start(PYTHONW, [str(SUPERVISOR), "--interval", "30"]))
+        if loop_age is None or loop_age > LOOP_STALE_S:
+            heal.append("buildloop " + start(PYTHONW, ["-m", "abrasax", "buildloop", "--interval", "60", "--warm", "--quiet"]))
+        for name, n in procs.items():
+            if name != "gateway" and n > 1:
+                heal.append(f"WARN {name} x{n} (supervisor/buildloop must be unique)")
+
+    g, d, q, le = gpu(), disk(), queue_depth(), loop_errors()
+    problems: list[str] = []
+    # Optional services (external samplers, non-production bridges) are tracked but never
+    # treated as incidents; the flag lives in the catalog so this file cannot drift
+    # from it (it already had: comfyui/imagegen are optional there and were counted
+    # as critical here, pinning the signature red on a host without that install).
+    absent, down_real = classify_down(probed, down)
+    OPTIONAL = optional_ids(probed)
+    critical_down = [s for s in down_real if s not in OPTIONAL]
+    problems += [f"down:{s}" for s in critical_down]
+    critical_absent = [s for s in absent if s not in OPTIONAL]
+    problems += [f"absent:{s}" for s in critical_absent]
+    if sup_age is None or sup_age > SUP_STALE_S:
+        problems.append("supervisor-stale")
+    if loop_age is None or loop_age > LOOP_STALE_S:
+        problems.append("buildloop-stale")
+    for name, n in procs.items():
+        if name != "gateway" and n > 1:
+            problems.append(f"duplicate:{name}x{n}")
+    if d["free_gb"] is not None and d["free_gb"] < DISK_MIN_GB:
+        problems.append(f"disk-low:{d['free_gb']}GB")
+    if g.get("ok") and g["temp_c"] >= GPU_TEMP_MAX:
+        problems.append(f"gpu-hot:{g['temp_c']}C")
+    if g.get("ok") and g.get("vram_total_mb"):
+        used_frac = g["vram_used_mb"] / g["vram_total_mb"]
+        if used_frac >= 0.95:
+            problems.append(f"vram-high:{g['vram_used_mb']}/{g['vram_total_mb']}MB")
+    if le["error_streak"] >= 3:
+        problems.append(f"buildloop-errors:{le['error_streak']}")
+
+    return {
+        "ts": now(),
+        "signature": "|".join(sorted(problems)) or "healthy",
+        "problems": sorted(problems),
+        "services_up": [s["id"] for s in probed if s.get("up")],
+        "services_down": down,
+        "services_absent": absent,
+        "critical_down": critical_down,
+        "critical_absent": critical_absent,
+        "procs": procs,
+        "supervisor_age_s": sup_age,
+        "buildloop_age_s": loop_age,
+        "queue_pending": q,
+        "buildloop": le,
+        "gpu": g,
+        "disk": d,
+        "heals": heal,
+        "dry_run": dry_run,
+    }
+
+
+def emit(state: dict, quiet: bool = False) -> None:
+    LOGS.mkdir(parents=True, exist_ok=True)
+    prev_sig = None
+    try:
+        prev_sig = json.loads(STATE.read_text(encoding="utf-8")).get("signature")
+    except Exception:
+        pass
+    STATE.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    with LEDGER.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps({k: state[k] for k in
+                             ("ts", "signature", "problems", "services_down", "services_absent",
+                              "procs", "supervisor_age_s", "buildloop_age_s",
+                              "queue_pending", "heals")}) + "\n")
+    if state["signature"] != prev_sig:
+        with ALERTS.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"ts": state["ts"], "from": prev_sig, "to": state["signature"],
+                                 "problems": state["problems"], "heals": state["heals"]}) + "\n")
+    HEARTBEAT.write_text(state["ts"] + "\n", encoding="utf-8")
+    if not quiet:
+        print(json.dumps(state, indent=2))
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--once", action="store_true")
+    ap.add_argument("--interval", type=int, default=30)
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--json", action="store_true", help="one-shot: raw state only")
+    ap.add_argument("--quiet", action="store_true")
+    a = ap.parse_args()
+
+    if a.once:
+        state = snapshot(a.dry_run)
+        emit(state, quiet=True)
+        if a.json:
+            print(json.dumps(state))
+        elif not a.quiet:
+            print(json.dumps(state, indent=2))
+        return 0
+
+    # resident: single instance
+    if PIDFILE.exists():
+        try:
+            old = int(PIDFILE.read_text().strip())
+        except Exception:
+            old = 0
+        if old and old != os.getpid() and pid_alive(old):
+            print(f"ops_monitor already running pid={old}")
+            return 0
+    PIDFILE.write_text(str(os.getpid()), encoding="utf-8")
+    print(f"ops_monitor pid={os.getpid()} interval={a.interval}s")
+    try:
+        while True:
+            t0 = time.time()
+            try:
+                emit(snapshot(a.dry_run), quiet=a.quiet)
+            except Exception as exc:  # never die on one bad tick
+                with ALERTS.open("a", encoding="utf-8") as fh:
+                    fh.write(json.dumps({"ts": now(), "error": f"{exc.__class__.__name__}: {exc}"}) + "\n")
+            time.sleep(max(1.0, a.interval - (time.time() - t0)))
+    finally:
+        try:
+            PIDFILE.unlink(missing_ok=True)
+        except Exception:
+            pass
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

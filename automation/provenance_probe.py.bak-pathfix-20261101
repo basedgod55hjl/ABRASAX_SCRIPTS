@@ -1,0 +1,127 @@
+"""Test the provenance claim against the three signed binaries.
+
+Claim: "A Windows Delphi/VCL DAW shipped on macOS via FreePascal 3.2.3, bridged
+through a 32-function Win32 shim that serialises the registry to
+/Preferences/Image-Line/reg.xml and maps OLE drag-drop onto NSDragging."
+
+Each element is independently falsifiable:
+  1. Delphi/VCL  -> RTTI class names (TForm, TApplication, TWinControl) and
+                    exported Symbols in the __objc/ or class-name tables
+  2. FPC 3.2.3   -> FPC RTL symbols: FPC_INITIALIZEUNITS, FPC_FINALIZE,
+                    fpc_ansistr_*, SYSTEM_$$_*, __fpc_*
+  3. 32-function shim -> count exported win32-ish names in libwinbridge
+  4. reg.xml path -> literal string "/Preferences/Image-Line/reg.xml"
+  5. NSDragging   -> Objective-C selector/method names in the symbol table
+  6. NSDragging<->OLE mapping -> coexistence of both name families in one binary
+
+Reads symbol/string tables directly. No network, no execution of the binaries.
+"""
+from __future__ import annotations
+
+import re
+import struct
+from pathlib import Path
+
+BASE = Path(r"C:\Users\sirch\_WORK\fl_unpack\Library\Audio\Plug-Ins\VST"
+            r"\FL Studio VSTi.vst\Contents")
+SHARED = BASE / "Resources" / "Shared"
+
+FAT_MAGIC = 0xCAFEBABE
+MH_MAGIC_64 = 0xFEEDFACF
+LC_SYMTAB = 0x2
+LC_SEGMENT_64 = 0x19
+
+PROBES = {
+    "FPC RTL": [b"FPC_INITIALIZEUNITS", b"FPC_FINALIZE", b"fpc_ansistr",
+                b"fpc_initialize", b"__fpc_", b"FPC_THREADVAR",
+                b"SYSTEM_$$_", b"fpc_do_exit", b"fpc_raiseexception"],
+    "Delphi/VCL": [b"TForm", b"TApplication", b"TWinControl", b"TCustomForm",
+                   b"Vcl.", b"TCanvas", b"TMouse", b"TComponent",
+                   b"System.pas", b"Classes.pas"],
+    "Objective-C/AppKit": [b"NSDragging", b"NSView", b"NSApplication",
+                           b"NSWindow", b"NSObject", b"@selector",
+                           b"draggingSession", b"NSDraggingInfo",
+                           b"pasteboard", b"NSPasteboard"],
+    "OLE/drag-drop": [b"IDropTarget", b"DoDragDrop", b"RegisterDragDrop",
+                      b"OleInitialize", b"ForgetDragDrop", b"IDropSource",
+                      b"OLE32", b"ole32"],
+    "registry on disk": [b"/Preferences/Image-Line/reg.xml", b"reg.xml",
+                         b"/Preferences/Image-Line", b"RegOpenKey",
+                         b"RegQueryValue", b"RegSetValue", b"HKEY_CURRENT_USER"],
+    "Win32 shim": [b"GetProcAddress", b"LoadLibrary", b"CreateWindowEx",
+                   b"SetWindowLong", b"GetMessage", b"DispatchMessage"],
+}
+
+
+def slices(fh):
+    if struct.unpack(">I", fh.read(4))[0] != FAT_MAGIC:
+        return []
+    n = struct.unpack(">I", fh.read(4))[0]
+    out = []
+    for _ in range(n):
+        ct, _s, off, size, _a = struct.unpack(">iiIII", fh.read(20))
+        out.append((ct, off, size))
+    return out
+
+
+def symbology(fh, off) -> tuple[set[str], int]:
+    """Return (exported symbol names, count) from LC_SYMTAB."""
+    fh.seek(off)
+    hdr = fh.read(32)
+    if struct.unpack("<I", hdr[:4])[0] != MH_MAGIC_64:
+        return set(), 0
+    ncmds = struct.unpack("<I", hdr[16:20])[0]
+    pos = off + 32
+    symoff = stroff = nsyms = strsize = 0
+    for _ in range(ncmds):
+        fh.seek(pos)
+        raw = fh.read(8)
+        if len(raw) < 8:
+            break
+        cmd, cmdsize = struct.unpack("<II", raw)
+        if cmd == LC_SYMTAB:
+            fh.seek(pos + 8)
+            symoff, nsyms, stroff, strsize = struct.unpack("<IIII", fh.read(16))
+        pos += cmdsize
+    names: set[str] = set()
+    if not nsyms or not strsize:
+        return names, 0
+    fh.seek(stroff)
+    strtab = fh.read(min(strsize, 64 << 20))
+    for chunk in re.findall(rb"[\x20-\x7e]{4,}", strtab):
+        names.add(chunk.decode("ascii", "replace"))
+    return names, nsyms
+
+
+def main() -> int:
+    targets = [BASE / "MacOS" / "vstplugin",
+               SHARED / "ILTools_x64.dylib",
+               SHARED / "libwinbridge_x64.dylib"]
+    for p in targets:
+        if not p.exists():
+            print(f"missing {p}")
+            continue
+        print(f"\n{'=' * 78}\n{p.name}   {p.stat().st_size:,} B")
+        with p.open("rb") as fh:
+            allnames: set[str] = set()
+            total_syms = 0
+            for ct, off, _sz in slices(fh):
+                arch = "x86_64" if ct == 0x01000007 else "arm64"
+                names, n = symbology(fh, off)
+                allnames |= names
+                total_syms += n
+                print(f"  slice {arch}: nsyms={n:,} strings={len(names):,}")
+            print(f"  total symbols: {total_syms:,}")
+            for group, probes in PROBES.items():
+                hits = []
+                for pr in probes:
+                    txt = pr.decode("ascii", "replace")
+                    n = sum(1 for nm in allnames if txt in nm)
+                    if n:
+                        hits.append(f"{txt}({n})")
+                print(f"  {group:20} {'YES  ' + ', '.join(hits) if hits else 'no'}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

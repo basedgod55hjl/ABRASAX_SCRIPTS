@@ -1,0 +1,69 @@
+"""verify_restored.py — prove a mirror-restored repo equals its mirror.
+
+A restore is only real if the remote's default-branch commit tree hash equals the
+mirror's. Comparing commit SHAs would be weaker (a re-created repo keeps the SHA
+only if every object is identical, which is true, but the tree hash comparison
+also catches a branch pointing somewhere else).
+
+    python SCRIPTS/verify_restored.py ABRASAX-DATA ABRASAX-SWARM-AI
+"""
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from tools.abx import repo, repos24  # noqa: E402
+
+MIRRORS = Path(r"C:\abrasax-backup\mirrors")
+
+
+def main(argv: list[str] | None = None) -> int:
+    names = [a for a in (sys.argv[1:] if argv is None else argv) if not a.startswith("--")]
+    if not names:
+        print("usage: verify_restored.py <repo> [repo...]")
+        return 2
+    listing = repo.remote_repos()
+    live = listing.get("repos", {}) if listing["ok"] else {}
+    ok_all = True
+    for name in names:
+        branch = next((r["branch"] for r in repos24.ROWS if r["repo"] == name), "main")
+        mirror = MIRRORS / f"{name}.git"
+        if not mirror.exists():
+            print(f"{name:<24} NO MIRROR")
+            ok_all = False
+            continue
+        m = repo.run(["git", "-C", str(mirror), "rev-parse", f"refs/heads/{branch}^{{tree}}"], timeout=120)
+        mirror_tree = m["stdout"].strip() or None
+        m_head = repo.run(["git", "-C", str(mirror), "rev-parse", f"refs/heads/{branch}"], timeout=120)
+        mirror_head = m_head["stdout"].strip() or None
+        if not mirror_head:
+            # an empty repo is not a failure: nothing to compare, and it was empty before
+            present = name in live
+            print(f"{name:<24} EMPTY both sides (present_on_github={present})")
+            ok_all = ok_all and present
+            continue
+        if name not in live:
+            print(f"{name:<24} MISSING ON GITHUB (mirror tree {str(mirror_tree)[:12]})")
+            ok_all = False
+            continue
+        full = live[name]["full_name"]
+        res = repo._api(f"/repos/{full}/git/ref/heads/{branch}")
+        body = res.get("body") or {}
+        remote_sha = (body.get("object") or {}).get("sha")
+        tree = repo._api(f"/repos/{full}/git/commits/{remote_sha}").get("body") or {}
+        remote_tree = (tree.get("tree") or {}).get("sha")
+        same_tree = bool(mirror_tree) and mirror_tree == remote_tree
+        same_head = bool(mirror_head) and mirror_head == remote_sha
+        ok_all = ok_all and same_tree and same_head
+        print(f"{name:<24} branch={branch:<7} head={str(remote_sha)[:8]} tree={str(remote_tree)[:8]} "
+              f"tree_match={same_tree} head_match={same_head}")
+    print(json.dumps({"ok": ok_all}))
+    return 0 if ok_all else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+"""Keep the primary GGUF loaded, with one instance, and record the PRIMAL hex.
+
+Why this exists: LM Studio evicts models under VRAM pressure. Its own log showed
+"Model was unloaded while the request was still in queue" while three models
+(9B + 1.2B + embedder) were resident on a 6 GB card. A naive retry loop then
+re-loads the model, which creates `:2`/`:3` duplicates and makes it worse.
+
+Policy enforced by this loop:
+  * exactly one `huihui-qwen3.5-9b-abliterated@q3_k_m`, at --parallel 1
+  * duplicate identifiers (:2, :3, ...) are unloaded
+  * the 1.2B fast model is unloaded when free VRAM is tight
+  * the embedder is kept on CPU (--gpu off) so it cannot evict the 9B
+  * every action is appended to LOGS/keep_model_loaded.jsonl with the PRIMAL hex
+
+Usage:
+    python SCRIPTS/automation/keep_model_loaded.py --once
+    python SCRIPTS/automation/keep_model_loaded.py --loop --interval 60
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import subprocess
+import time
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+LOG = ROOT / "LOGS" / "keep_model_loaded.jsonl"
+STATE = ROOT / "LOGS" / "keep_model_loaded.json"
+LMS = Path.home() / ".lmstudio" / "bin" / "lms.exe"
+TARGET = "huihui-qwen3.5-9b-abliterated@q3_k_m"
+FAST = "liquid/lfm2.5-1.2b"
+EMBED = "text-embedding-nomic-embed-text-v1.5"
+PRIMAL_HEX = "4f5349524953424c58434b"  # OSIRISBLXCK
+# A 5.53 GB model on a 6.14 GB card needs ~1.5 GB of headroom for KV cache and
+# the CUDA context. At 980 MB free LM Studio was already evicting queued work.
+VRAM_TIGHT_MB = 1500
+PRIMARY_FLAGS = ["--gpu", "0.95", "--parallel", "1",
+                 "--context-length", "2048", "--ttl", "604800"]
+EMBED_FLAGS = ["--gpu", "off", "--ttl", "86400"]
+
+
+def run(cmd: list[str], timeout: int = 180) -> tuple[int, str]:
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
+                           encoding="utf-8", errors="replace",
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        return p.returncode, (p.stdout or "") + (p.stderr or "")
+    except Exception as exc:  # noqa: BLE001
+        return 1, f"{type(exc).__name__}: {exc}"
+
+
+def loaded() -> list[dict]:
+    rc, out = run([str(LMS), "ps"], timeout=60)
+    rows = []
+    if rc != 0:
+        return rows
+    for line in out.splitlines():
+        if not line.strip() or line.startswith("IDENTIFIER"):
+            continue
+        parts = re.split(r"\s{2,}", line.strip())
+        if len(parts) < 3:
+            continue
+        ident = parts[0]
+        if not (ident.startswith("huihui-") or ident.startswith("liquid/")
+                or ident.startswith("text-embedding-")):
+            continue
+        rows.append({"id": ident, "model": parts[1], "status": parts[2],
+                     "size": parts[3] if len(parts) > 3 else "",
+                     "context": parts[4] if len(parts) > 4 else "",
+                     "parallel": parts[5] if len(parts) > 5 else ""})
+    return rows
+
+
+def vram() -> tuple[int, int]:
+    rc, out = run(["nvidia-smi", "--query-gpu=memory.used,memory.total",
+                   "--format=csv,noheader,nounits"], timeout=20)
+    if rc != 0:
+        return 0, 0
+    try:
+        used, total = [int(x.strip()) for x in out.splitlines()[0].split(",")[:2]]
+        return used, total
+    except Exception:  # noqa: BLE001
+        return 0, 0
+
+
+def api_models() -> list[str]:
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:1234/v1/models", timeout=8) as r:
+            data = json.loads(r.read().decode("utf-8", "replace"))
+        return [m.get("id") for m in data.get("data", [])]
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def unload(ident: str) -> str:
+    rc, out = run([str(LMS), "unload", ident], timeout=60)
+    return "unloaded" if rc == 0 else f"unload_failed:{out.strip()[:120]}"
+
+
+def load(ident: str, extra: list[str]) -> str:
+    rc, out = run([str(LMS), "load", ident, *extra, "-y"], timeout=600)
+    return "loaded" if rc == 0 else f"load_failed:{out.strip()[:200]}"
+
+
+def tick() -> dict:
+    rows = loaded()
+    ids = [r["id"] for r in rows]
+    used, total = vram()
+    free = max(0, total - used)
+    actions: list[str] = []
+
+    # 1. remove duplicate identifiers of the target
+    for ident in ids:
+        if ident.startswith(TARGET + ":") and ident != TARGET:
+            actions.append(f"{ident}:{unload(ident)}")
+
+    # 2. target must exist exactly once
+    if TARGET not in ids:
+        actions.append(f"{TARGET}:{load(TARGET, PRIMARY_FLAGS)}")
+    else:
+        row = next(r for r in rows if r["id"] == TARGET)
+        if row.get("parallel") not in ("", "1"):
+            actions.append(f"{TARGET}:reload_parallel_1")
+            unload(TARGET)
+            actions.append(f"{TARGET}:{load(TARGET, PRIMARY_FLAGS)}")
+
+    # 3. fast model is not kept warm when VRAM is tight
+    if FAST in ids and free < VRAM_TIGHT_MB:
+        actions.append(f"{FAST}:{unload(FAST)}")
+
+    # 4. embedder stays resident on CPU
+    if EMBED not in ids:
+        actions.append(f"{EMBED}:{load(EMBED, EMBED_FLAGS)}")
+
+    state = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "primal_hex": PRIMAL_HEX,
+        "target": TARGET,
+        "loaded": loaded(),
+        "vram_used_mib": used,
+        "vram_total_mib": total,
+        "vram_free_mib": free,
+        "api_has_target": TARGET in api_models(),
+        "actions": actions,
+    }
+    LOG.parent.mkdir(exist_ok=True)
+    with LOG.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(state) + "\n")
+    STATE.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    return state
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--once", action="store_true")
+    ap.add_argument("--loop", action="store_true")
+    ap.add_argument("--interval", type=int, default=60)
+    args = ap.parse_args()
+    if args.once or not args.loop:
+        s = tick()
+        print(f"{s['ts']} hex={s['primal_hex']} vram={s['vram_used_mib']}/{s['vram_total_mib']} "
+              f"target={s['api_has_target']} actions={s['actions'] or 'none'}")
+        return 0
+    while True:
+        try:
+            s = tick()
+            print(f"{s['ts']} vram={s['vram_used_mib']}/{s['vram_total_mib']} "
+                  f"target={s['api_has_target']} actions={s['actions'] or 'none'}", flush=True)
+        except Exception as exc:  # noqa: BLE001
+            print(f"tick_error {type(exc).__name__}: {exc}", flush=True)
+        time.sleep(max(10, args.interval))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

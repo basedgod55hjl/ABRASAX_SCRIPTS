@@ -1,0 +1,14 @@
+@echo off
+set BIN=C:\ABRASAX\BUILD\llamacpp\build\bin
+set LOGS=C:\ABRASAX\LOGS
+cd /d "%BIN%"
+
+rem Load the Unity coder GGUF on the GPU with a small, predictable context so it
+rem fits beside the brain kernel; TTL lets it unload when idle.
+rem DEAD PATH (sirch): unity-csharp-coder GGUF absent on this host
+rem   (was --model "C:\Users\sirch\.lmstudio\models\HussainIsWashed\unity-csharp-coder\qwen2.5-coder-7b-instruct.Q4_K_M.gguf")
+llama-server.exe ^
+  --host 127.0.0.1 --port 8081 ^
+  --ctx-size 4096 --n-gpu-layers 99 --threads 8 ^
+  --parallel 1 --cont-batching ^
+  > "%LOGS%\ls-unity.log" 2>&1

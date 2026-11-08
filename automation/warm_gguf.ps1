@@ -1,0 +1,46 @@
+# warm_gguf.ps1 — JIT-load a GGUF so the build loop never stalls.
+# Usage: powershell -ExecutionPolicy Bypass -File warm_gguf.ps1 [-Models "a","b"] [-TimeoutSec 600]
+#
+# NOTE: LM Studio 0.4+ requires Bearer auth when "Require Authentication" is on, so the
+# token is read from C:\ABRASAX\.env (LM_STUDIO_API_KEY or LM_API_KEY).
+# NOTE: with "Only Keep Last JIT Loaded Model" enabled, warming several big GGUFs in a row
+# evicts each other. Default is the single primary model; pass -Models only if you accept that.
+param(
+    [string[]]$Models = @('gemma-4-e2b-uncensored-hauhaucs-aggressive'),
+    [int]$TimeoutSec = 600
+)
+$ErrorActionPreference = 'Continue'
+$log = 'C:\ABRASAX\LOGS\gguf-warm.log'
+$url = 'http://127.0.0.1:1234/v1/chat/completions'
+New-Item -ItemType Directory -Force -Path (Split-Path $log) | Out-Null
+
+$token = $env:LM_STUDIO_API_KEY
+if (-not $token) { $token = $env:LM_API_KEY }
+if (-not $token -and (Test-Path 'C:\ABRASAX\.env')) {
+    foreach ($line in Get-Content 'C:\ABRASAX\.env' -ErrorAction SilentlyContinue) {
+        if ($line -match '^\s*(LM_STUDIO_API_KEY|LM_API_KEY)\s*=\s*(.+?)\s*$') { $token = $Matches[2]; break }
+    }
+}
+$headers = @{}
+if ($token) { $headers['Authorization'] = "Bearer $token" }
+
+foreach ($m in $Models) {
+    $body = @{
+        model      = $m
+        messages   = @(@{ role = 'user'; content = 'warm' })
+        max_tokens = 2
+        stream     = $false
+    } | ConvertTo-Json -Depth 5
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    try {
+        $r = Invoke-RestMethod -Uri $url -Method Post -ContentType 'application/json' `
+            -Headers $headers -Body $body -TimeoutSec $TimeoutSec
+        $sw.Stop()
+        $line = "{0} OK {1}ms model={2}" -f (Get-Date -Format o), $sw.ElapsedMilliseconds, $m
+    } catch {
+        $sw.Stop()
+        $line = "{0} FAIL {1}ms model={2} err={3}" -f (Get-Date -Format o), $sw.ElapsedMilliseconds, $m, $_.Exception.Message
+    }
+    Add-Content -Path $log -Value $line -Encoding UTF8
+    Write-Output $line
+}

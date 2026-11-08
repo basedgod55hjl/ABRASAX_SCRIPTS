@@ -1,0 +1,85 @@
+"""Segment-membership test for the claimed "selector" addresses.
+
+Contradiction to resolve: two exports share slot 0x1FBB4C8 and hold 0xFFFFFFFF,
+yet VectorRamp_32f and VectorRamp_64f are independent functions 197 KB apart. A
+single resolved slot cannot serve both. So either the slot address is wrong, or
+the lazy-resolution model is wrong.
+
+The file itself declares where segments live: LC_SEGMENT_64 gives vmaddr and
+vmsize. If 0x1FBB4C8 is outside every segment, the address came from bad
+arithmetic (file offset mixed with virtual address) and the 0xFFFFFFFF is noise.
+
+This also explains WHY: interleave.py computes slot = entry + 7 + disp, treating
+`entry` as a file offset. A rip-relative LEA displacement is relative to the
+VIRTUAL address of the next instruction, so the two must not be mixed.
+"""
+from __future__ import annotations
+
+import struct
+from pathlib import Path
+
+P = Path(r"C:\Users\sirch\_WORK\fl_unpack\Library\Audio\Plug-Ins\VST"
+         r"\FL Studio VSTi.vst\Contents\Resources\Shared\dsp_ippv2_x64.dylib")
+
+FAT_MAGIC = 0xCAFEBABE
+MH_MAGIC_64 = 0xFEEDFACF
+LC_SEGMENT_64 = 0x19
+SEG = struct.Struct("<II16sQQQQiiII")
+
+SLOTS = [0x1FBDF68, 0x1FBB4C8]
+ENTRIES = [0x1905A60, 0x19058E0, 0x16411C0, 0x1671680]
+
+
+def slices(fh):
+    if struct.unpack(">I", fh.read(4))[0] != FAT_MAGIC:
+        return []
+    n = struct.unpack(">I", fh.read(4))[0]
+    return [struct.unpack(">iiIII", fh.read(20)) for _ in range(n)]
+
+
+with P.open("rb") as fh:
+    for ct, _s, off, _sz, _a in slices(fh):
+        if ct != 0x01000007:
+            continue
+        fh.seek(off)
+        hdr = fh.read(32)
+        ncmds = struct.unpack("<I", hdr[16:20])[0]
+        pos = off + 32
+        segs = []
+        for _ in range(ncmds):
+            fh.seek(pos)
+            raw = fh.read(8)
+            if len(raw) < 8:
+                break
+            cmd, cmdsize = struct.unpack("<II", raw)
+            if cmd == LC_SEGMENT_64:
+                fh.seek(pos)
+                vals = SEG.unpack(fh.read(SEG.size))
+                name = vals[2].split(b"\0")[0].decode("ascii", "replace")
+                segs.append((name, vals[3], vals[4], vals[5], vals[6]))
+            pos += cmdsize
+
+        print("segments (vmaddr .. vmaddr+vmsize, fileoff):")
+        for name, vmaddr, vmsize, fileoff, filesize in segs:
+            print(f"  {name:16} {vmaddr:#012x} .. {vmaddr + vmsize:#012x}  "
+                  f"fileoff={fileoff:#010x} size={filesize:,}")
+
+        def locate(addr: int) -> str:
+            for name, vmaddr, vmsize, fileoff, filesize in segs:
+                if vmaddr <= addr < vmaddr + vmsize:
+                    within = addr - vmaddr
+                    in_file = within < filesize
+                    return (f"{name}" + ("" if in_file else " (beyond file data)")
+                            + f"  offset_in_seg={within:#x}")
+            return "OUTSIDE ALL SEGMENTS"
+
+        print("\nthe claimed 'selector' addresses:")
+        for a in SLOTS:
+            fh.seek(a)  # treat as file offset, as interleave.py effectively does
+            raw = fh.read(8)
+            print(f"  {a:#012x}: {locate(a)}   bytes@fileoff: {raw.hex(' ')}")
+
+        print("\nthe entry addresses (sanity -- these must be valid):")
+        for a in ENTRIES:
+            print(f"  {a:#012x}: {locate(a)}")
+        break

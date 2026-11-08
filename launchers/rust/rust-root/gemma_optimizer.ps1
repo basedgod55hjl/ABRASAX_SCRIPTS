@@ -1,0 +1,55 @@
+
+$API_URL = "http://127.0.0.1:1234/v1"
+$MODEL = "gemma-4-e2b-uncensored-hauhaucs-aggressive"
+$LOG_FILE = "$env:USERPROFILE\Desktop\ABRASAX\10_DATA_MEMORY\gemma_optimizer_log.json"
+$INTERVAL = 300
+
+function Get-SystemState {
+    $gpu = nvidia-smi --query-gpu=name,memory.used,memory.free,temperature.gpu,utilization.gpu --format=csv,noheader 2>$null
+    if (-not $gpu) { $gpu = "No NVIDIA GPU found" }
+    $os = Get-CimInstance Win32_OperatingSystem
+    $ram = "RAM: " + [math]::Round($os.TotalVisibleMemorySize/1MB,1) + "GB total, " + [math]::Round(($os.TotalVisibleMemorySize-$os.FreePhysicalMemory)/1MB,1) + "GB used"
+    $cpu = Get-CimInstance Win32_Processor
+    $cpuInfo = "CPU: " + $cpu.Name + " | Cores: " + $cpu.NumberOfCores + " | Load: " + $cpu.LoadPercentage + "%"
+    $disk = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" | ForEach-Object { $_.DeviceID + " " + [math]::Round($_.Size/1GB,1) + "GB total, " + [math]::Round(($_.Size-$_.FreeSpace)/1GB,1) + "GB used" }
+    $procs = Get-Process | Sort-Object WorkingSet64 -Descending | Select-Object -First 8 Name, @{N='MemMB';E={[math]::Round($_.WorkingSet64/1MB,1)}} | Format-Table -AutoSize | Out-String
+    return "GPU: $gpu`n$ram`n$cpuInfo`n" + ($disk -join "`n") + "`nTOP_PROCESSES:`n$procs"
+}
+
+function Query-Gemma($sysState) {
+    $prompt = "You are a Windows PC optimizer. Current system state:`n`n$sysState`n`nGive exactly 2-3 optimization actions. Format as:`n- [ACTION] command or fix`n- [REASON] why`nKeep under 150 words."
+    $body = @{
+        model = $MODEL
+        messages = @(
+            @{role = "system"; content = "You are a PC optimizer AI."}
+            @{role = "user"; content = $prompt}
+        )
+        max_tokens = 300
+        temperature = 0.3
+    } | ConvertTo-Json -Depth 10
+    try {
+        $r = Invoke-WebRequest -Uri "$API_URL/chat/completions" -Method Post -Body $body -ContentType "application/json" -TimeoutSec 60 -UseBasicParsing
+        $data = $r.Content | ConvertFrom-Json
+        return $data.choices[0].message.content
+    } catch { return "API_FAIL: " + $_.Exception.Message }
+}
+
+function Save-Log($entry) {
+    $log = @()
+    if (Test-Path $LOG_FILE) {
+        try { $log = Get-Content $LOG_FILE | ConvertFrom-Json } catch { $log = @() }
+    }
+    $log += $entry
+    $log | Select-Object -Last 100 | ConvertTo-Json -Depth 5 | Set-Content $LOG_FILE
+}
+
+while ($true) {
+    $ts = Get-Date -Format "o"
+    try {
+        $state = Get-SystemState
+        $rec = Query-Gemma $state
+        Save-Log @{timestamp = $ts; system = $state; recommendation = $rec}
+        Write-Host "[$ts] Analyzed"
+    } catch { Write-Host "[$ts] Error: $_" }
+    Start-Sleep -Seconds $INTERVAL
+}

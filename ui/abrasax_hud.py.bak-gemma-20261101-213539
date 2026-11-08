@@ -1,0 +1,905 @@
+"""ABRASAX HUD v2 — borderless, always-on-top Dear ImGui overlay.
+
+A translucent floating instrument panel that renders the live synaptic-brain
+field, the runtime's vital signs, per-service dots and a chat line into the
+AbrASax gateway, on top of every other window.
+
+    python SCRIPTS/ui/abrasax_hud.py                 # config-driven start
+    python SCRIPTS/ui/abrasax_hud.py --monitor 2     # top-right of monitor 2
+    python SCRIPTS/ui/abrasax_hud.py --scale 1.25    # override saved/auto scale
+    python SCRIPTS/ui/abrasax_hud.py --ask "status?" # chat once, at startup
+
+Controls
+    Ctrl+L    toggle click-through (WS_EX_TRANSPARENT on the GLFW HWND).
+              While active the same combo is registered as a global hotkey so
+              the HUD can be released even though it no longer takes mouse
+              focus. Ctrl+Shift+L does the same from anywhere, always.
+    Ctrl+H    hide / show (global while hidden, otherwise focused).
+    Ctrl+T    toggle always-on-top.
+    Enter     send the chat line.
+    Esc       quit.
+
+State
+    SCRIPTS/ui/hud_config.json holds x, y, scale and click_through. It is
+    written on drag-release, on a click-through toggle and on exit, and read
+    on start. --monitor overrides the saved position, --scale the saved scale.
+
+Data
+    GET  :9626/state + :9626/texture (brain facade), fallback :9001/brain/*.
+    POST :9001/v1/chat/completions  model lmstudio:liquid/lfm2.5-1.2b (route
+         pinned: the gateway's auto route defaults to the 27B), max_tokens 256.
+    LOGS/ops-state.json -> service dots (services_down first, then up).
+
+Log
+    LOGS/abrasax-hud.log gets `start`, every config/toggle event, chat results,
+    any fatal exception with traceback, and `exit after N frames`.
+"""
+from __future__ import annotations
+
+import argparse
+import base64
+import ctypes
+import ctypes.wintypes as wt
+import json
+import math
+import sys
+import threading
+import time
+import traceback
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+import glfw
+import imgui
+import numpy as np
+from OpenGL import GL as gl
+from imgui.integrations.glfw import GlfwRenderer
+
+ROOT = Path("C:/ABRASAX")
+LOG_PATH = ROOT / "LOGS" / "abrasax-hud.log"
+CFG_PATH = ROOT / "SCRIPTS" / "ui" / "hud_config.json"
+OPS_STATE = ROOT / "LOGS" / "ops-state.json"
+
+BASE_W, BASE_H = 470.0, 540.0
+CHAT_URL = "http://127.0.0.1:9001/v1/chat/completions"
+CHAT_MODEL = "liquid/lfm2.5-1.2b"
+# The gateway routes by provider prefix ("lmstudio:", "nvidia:", "xpl:"). Without
+# it the router picks the provider default (prism-ml/bonsai-27b, ~20 s per 16
+# tokens) instead of the 1.2B model this panel is for.
+CHAT_MODEL_WIRE = "lmstudio:" + CHAT_MODEL
+CHAT_MAX_TOKENS = 256
+FONT_FILE = "C:/Windows/Fonts/consola.ttf"
+
+# -- design tokens (DOC/DESIGN-SYSTEM.md) -----------------------------------
+ACCENT = (0.486, 0.424, 0.941, 1.0)
+OK = (0.180, 0.902, 0.627, 1.0)
+WARN = (1.000, 0.690, 0.125, 1.0)
+BAD = (1.000, 0.373, 0.427, 1.0)
+MUTED = (0.490, 0.490, 0.580, 1.0)
+BORDER = (0.137, 0.137, 0.227, 1.0)
+
+# -- win32 ------------------------------------------------------------------
+_user32 = ctypes.WinDLL("user32", use_last_error=True)
+GWL_EXSTYLE = -20
+WS_EX_TRANSPARENT = 0x00000020
+SWP_NOSIZE = 0x0001
+SWP_NOMOVE = 0x0002
+SWP_NOZORDER = 0x0004
+SWP_NOACTIVATE = 0x0010
+SWP_FRAMECHANGED = 0x0020
+WM_HOTKEY = 0x0312
+MOD_CONTROL, MOD_SHIFT, MOD_NOREPEAT = 0x0002, 0x0004, 0x4000
+VK_L, VK_H = ord("L"), ord("H")
+HWND_TOPMOST = wt.HWND(-1)
+
+if hasattr(_user32, "GetWindowLongPtrW"):
+    _get_long = _user32.GetWindowLongPtrW
+    _set_long = _user32.SetWindowLongPtrW
+else:  # pragma: no cover - 32-bit fallback
+    _get_long = _user32.GetWindowLongW
+    _set_long = _user32.SetWindowLongW
+_get_long.restype = ctypes.c_ssize_t
+_get_long.argtypes = (wt.HWND, ctypes.c_int)
+_set_long.restype = ctypes.c_ssize_t
+_set_long.argtypes = (wt.HWND, ctypes.c_int, ctypes.c_ssize_t)
+_user32.SetWindowPos.argtypes = (wt.HWND, wt.HWND, ctypes.c_int, ctypes.c_int,
+                                 ctypes.c_int, ctypes.c_int, ctypes.c_uint)
+_user32.RegisterHotKey.argtypes = (wt.HWND, ctypes.c_int, ctypes.c_uint, ctypes.c_uint)
+_user32.UnregisterHotKey.argtypes = (wt.HWND, ctypes.c_int)
+_user32.PeekMessageW.argtypes = (ctypes.POINTER(wt.MSG), wt.HWND, ctypes.c_uint,
+                                 ctypes.c_uint, ctypes.c_uint)
+
+
+def log(msg: str) -> None:
+    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    with LOG_PATH.open("a", encoding="utf-8") as fh:
+        fh.write(f"{stamp} {msg}\n")
+
+
+def get_ex_style(hwnd: int) -> int:
+    return int(_get_long(wt.HWND(hwnd), GWL_EXSTYLE))
+
+
+def set_click_through(hwnd: int, on: bool) -> int:
+    """Set/clear WS_EX_TRANSPARENT so the mouse reaches the desktop below."""
+    ex = get_ex_style(hwnd)
+    new = (ex | WS_EX_TRANSPARENT) if on else (ex & ~WS_EX_TRANSPARENT)
+    if new != ex:
+        _set_long(wt.HWND(hwnd), GWL_EXSTYLE, new)
+    _user32.SetWindowPos(wt.HWND(hwnd), None, 0, 0, 0, 0,
+                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+                         SWP_NOACTIVATE | SWP_FRAMECHANGED)
+    return get_ex_style(hwnd)
+
+
+def register_hotkey(hid: int, mods: int, vk: int) -> bool:
+    ok = bool(_user32.RegisterHotKey(None, hid, mods | MOD_NOREPEAT, vk))
+    if not ok:
+        log(f"hotkey {hid} register failed err={ctypes.get_last_error()}")
+    return ok
+
+
+def unregister_hotkey(hid: int) -> None:
+    _user32.UnregisterHotKey(None, hid)
+
+
+def pump_hotkeys() -> list[int]:
+    """Pull only WM_HOTKEY out of the thread queue; leave GLFW's messages."""
+    ids: list[int] = []
+    msg = wt.MSG()
+    while _user32.PeekMessageW(ctypes.byref(msg), None, WM_HOTKEY, WM_HOTKEY, 1):
+        ids.append(int(msg.wParam))
+    return ids
+
+
+# -- config -----------------------------------------------------------------
+DEFAULT_CFG = {"x": None, "y": None, "scale": None, "click_through": False}
+
+
+def load_config() -> dict:
+    cfg = dict(DEFAULT_CFG)
+    try:
+        if CFG_PATH.exists():
+            data = json.loads(CFG_PATH.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                for key in DEFAULT_CFG:
+                    if key in data:
+                        cfg[key] = data[key]
+    except Exception as exc:
+        log(f"config load failed ({exc.__class__.__name__}: {exc}) - using defaults")
+    return cfg
+
+
+def save_config(cfg: dict) -> None:
+    CFG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "x": cfg.get("x"),
+        "y": cfg.get("y"),
+        "scale": round(float(cfg.get("scale") or 1.0), 3),
+        "click_through": bool(cfg.get("click_through")),
+        "updated": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "note": "ABRASAX HUD v2 window state; delete to fall back to auto placement",
+    }
+    tmp = CFG_PATH.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(CFG_PATH)
+
+
+# -- brain facade -----------------------------------------------------------
+def get_json(path: str, timeout: float = 4.0):
+    for base in ("http://127.0.0.1:9626", "http://127.0.0.1:9001/brain"):
+        try:
+            with urllib.request.urlopen(base + path, timeout=timeout) as r:
+                return json.loads(r.read())
+        except Exception:
+            continue
+    return None
+
+
+def post_step(n: int) -> None:
+    body = json.dumps({"n": n, "learn": True}).encode()
+    for url in ("http://127.0.0.1:9626/step", "http://127.0.0.1:9001/brain/step"):
+        try:
+            req = urllib.request.Request(url, data=body,
+                                         headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=20).read()
+            return
+        except Exception:
+            continue
+
+
+def read_services() -> list[dict]:
+    """ops-state.json -> services, failures first so red dots lead the row."""
+    try:
+        data = json.loads(OPS_STATE.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    up = [str(s) for s in (data.get("services_up") or [])]
+    down = [str(s) for s in (data.get("services_down") or [])]
+    return [{"name": n, "up": False} for n in down] + \
+           [{"name": n, "up": True} for n in up]
+
+
+class Live:
+    """Background poller so the GL loop never blocks on HTTP or disk."""
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.state: dict | None = None
+        self.grid: np.ndarray | None = None
+        self.services: list[dict] = []
+        self.error: str | None = None
+        self.stop = False
+        self._kick = threading.Event()
+        self.t = threading.Thread(target=self._run, name="hud-live", daemon=True)
+        self.t.start()
+
+    def kick(self) -> None:
+        self._kick.set()
+
+    def _run(self) -> None:
+        while not self.stop:
+            s = get_json("/state")
+            tx = get_json("/texture")
+            services = read_services()
+            g = None
+            if tx and tx.get("data"):
+                try:
+                    raw = base64.b64decode(tx["data"])
+                    n = int(tx.get("size", 64))
+                    g = np.frombuffer(raw, dtype=np.uint8)[: n * n].reshape(n, n)
+                except Exception:
+                    g = None
+            with self.lock:
+                if s:
+                    self.state = s
+                    self.error = None
+                else:
+                    self.error = "brain unreachable"
+                if g is not None:
+                    self.grid = g
+                self.services = services
+            self._kick.wait(2.0)
+            self._kick.clear()
+
+    def snapshot(self):
+        with self.lock:
+            return self.state, self.grid, self.error, list(self.services)
+
+
+class Chat:
+    """One chat turn at a time, on a worker thread."""
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.pending = False
+        self.reply = ""
+        self.error = ""
+        self.prompt = ""
+        self.latency = 0.0
+        self.serial = 0
+
+    def send(self, text: str) -> bool:
+        text = (text or "").strip()
+        with self.lock:
+            if self.pending or not text:
+                return False
+            self.pending = True
+            self.error = ""
+            self.prompt = text
+        log(f"chat send model={CHAT_MODEL_WIRE} chars={len(text)}")
+        threading.Thread(target=self._run, args=(text,), name="hud-chat",
+                         daemon=True).start()
+        return True
+
+    def _run(self, text: str) -> None:
+        t0 = time.time()
+        try:
+            payload = {
+                "model": CHAT_MODEL_WIRE,
+                "messages": [{"role": "user", "content": text}],
+                "max_tokens": CHAT_MAX_TOKENS,
+                "temperature": 0.7,
+                "stream": False,
+            }
+            req = urllib.request.Request(
+                CHAT_URL, data=json.dumps(payload).encode(),
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                data = json.loads(resp.read())
+            choices = data.get("choices") or [{}]
+            msg = choices[0].get("message") or {}
+            content = (msg.get("content") or choices[0].get("text") or "").strip()
+            if not content:
+                raise RuntimeError("gateway returned an empty message")
+            took = time.time() - t0
+            with self.lock:
+                self.reply = content
+                self.error = ""
+                self.pending = False
+                self.latency = took
+                self.serial += 1
+            log(f"chat ok {len(content)} chars in {took:.2f}s "
+                f"model={data.get('model', CHAT_MODEL)}")
+        except urllib.error.HTTPError as exc:
+            body = ""
+            try:
+                body = exc.read()[:300].decode("utf-8", "replace")
+            except Exception:
+                pass
+            with self.lock:
+                self.error = f"HTTP {exc.code}: {body or exc.reason}"
+                self.pending = False
+            log(f"chat fail HTTP {exc.code} {body[:160]}")
+        except Exception as exc:
+            with self.lock:
+                self.error = f"{exc.__class__.__name__}: {exc}"
+                self.pending = False
+            log(f"chat fail {exc.__class__.__name__}: {exc}")
+
+    def snapshot(self):
+        with self.lock:
+            return (self.pending, self.reply, self.error, self.latency, self.serial)
+
+
+# -- GL helpers -------------------------------------------------------------
+def make_texture() -> int:
+    tex = gl.glGenTextures(1)
+    gl.glBindTexture(gl.GL_TEXTURE_2D, tex)
+    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST)
+    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
+    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE)
+    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE)
+    return tex
+
+
+def upload(tex: int, grid: np.ndarray) -> None:
+    n = grid.shape[0]
+    rgba = np.empty((n, n, 4), dtype=np.uint8)
+    rgba[..., 0] = (20 + grid * 0.42).astype(np.uint8)
+    rgba[..., 1] = (8 + grid * 0.72).astype(np.uint8)
+    rgba[..., 2] = (40 + grid * 0.84).astype(np.uint8)
+    rgba[..., 3] = 255
+    gl.glBindTexture(gl.GL_TEXTURE_2D, tex)
+    gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, n, n, 0,
+                    gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, rgba.tobytes())
+
+
+def topmost(hwnd: int) -> None:
+    _user32.SetWindowPos(wt.HWND(hwnd), HWND_TOPMOST, 0, 0, 0, 0,
+                         SWP_NOMOVE | SWP_NOSIZE)
+
+
+def monitor_for(index: int | None):
+    monitors = glfw.get_monitors()
+    if not monitors:
+        return None
+    if index is None:
+        return glfw.get_primary_monitor() or monitors[0]
+    return monitors[max(1, min(int(index), len(monitors))) - 1]
+
+
+def place_top_right(win, monitor, w: int, h: int) -> tuple[int, int]:
+    if monitor is None:
+        glfw.set_window_pos(win, 40, 40)
+        return 40, 40
+    wx, wy, ww, wh = glfw.get_monitor_workarea(monitor)
+    x, y = int(wx + ww - w - 16), int(wy + 16)
+    glfw.set_window_pos(win, x, y)
+    return x, y
+
+
+def position_visible(x: int, y: int, w: int, h: int) -> bool:
+    for mon in glfw.get_monitors():
+        mx, my, mw, mh = glfw.get_monitor_workarea(mon)
+        ix = min(x + w, mx + mw) - max(x, mx)
+        iy = min(y + h, my + mh) - max(y, my)
+        if ix >= 80 and iy >= 40:
+            return True
+    return False
+
+
+def apply_style(scale: float) -> None:
+    style = imgui.get_style()
+    style.window_rounding = 14.0 * scale
+    style.frame_rounding = 6.0 * scale
+    style.child_rounding = 8.0 * scale
+    style.popup_rounding = 6.0 * scale
+    style.window_padding = (14.0 * scale, 12.0 * scale)
+    style.item_spacing = (8.0 * scale, 6.0 * scale)
+    style.frame_padding = (6.0 * scale, 3.0 * scale)
+    style.scrollbar_size = 10.0 * scale
+    style.grab_min_size = 8.0 * scale
+    colors = {
+        imgui.COLOR_WINDOW_BACKGROUND: (0.043, 0.043, 0.070, 0.90),
+        imgui.COLOR_TEXT: (0.843, 0.843, 0.894, 1.0),
+        imgui.COLOR_TEXT_DISABLED: MUTED,
+        imgui.COLOR_BUTTON: (0.082, 0.082, 0.122, 1.0),
+        imgui.COLOR_BUTTON_HOVERED: (0.153, 0.133, 0.259, 1.0),
+        imgui.COLOR_BUTTON_ACTIVE: ACCENT,
+        imgui.COLOR_BORDER: BORDER,
+        imgui.COLOR_SEPARATOR: BORDER,
+        imgui.COLOR_FRAME_BACKGROUND: (0.082, 0.082, 0.122, 1.0),
+        imgui.COLOR_FRAME_BACKGROUND_HOVERED: (0.106, 0.106, 0.153, 1.0),
+        imgui.COLOR_FRAME_BACKGROUND_ACTIVE: (0.125, 0.114, 0.196, 1.0),
+        imgui.COLOR_CHECK_MARK: ACCENT,
+        imgui.COLOR_POPUP_BACKGROUND: (0.063, 0.063, 0.098, 0.98),
+        imgui.COLOR_SCROLLBAR_BACKGROUND: (0.063, 0.063, 0.098, 0.60),
+        imgui.COLOR_SCROLLBAR_GRAB: BORDER,
+        imgui.COLOR_SCROLLBAR_GRAB_HOVERED: (0.196, 0.180, 0.310, 1.0),
+        imgui.COLOR_SCROLLBAR_GRAB_ACTIVE: ACCENT,
+    }
+    for key, val in colors.items():
+        style.colors[key] = val
+
+
+def draw_service_dots(services: list[dict], scale: float) -> None:
+    """Ten small dots: red = down, green = up, hollow = unused slot."""
+    slots = 10
+    radius = 4.0 * scale
+    step = 14.0 * scale
+    draw_list = imgui.get_window_draw_list()
+    x0, y0 = imgui.get_cursor_screen_pos()
+    cy = y0 + 7.0 * scale
+    for i in range(slots):
+        cx = x0 + radius + i * step
+        svc = services[i] if i < len(services) else None
+        if svc is None:
+            draw_list.add_circle(cx, cy, radius, imgui.get_color_u32_rgba(*BORDER),
+                                 12, 1.0 * scale)
+            label = "unused slot"
+        else:
+            col = OK if svc["up"] else BAD
+            draw_list.add_circle_filled(cx, cy, radius,
+                                        imgui.get_color_u32_rgba(*col), 12)
+            label = f"{svc['name']} — {'up' if svc['up'] else 'DOWN'}"
+        if imgui.is_mouse_hovering_rect(cx - radius - 2 * scale,
+                                        cy - radius - 2 * scale,
+                                        cx + radius + 2 * scale,
+                                        cy + radius + 2 * scale):
+            imgui.set_tooltip(label)
+    imgui.dummy(slots * step + 4 * scale, 14.0 * scale)
+    imgui.same_line()
+    up = sum(1 for s in services if s["up"])
+    down = len(services) - up
+    imgui.push_style_color(imgui.COLOR_TEXT, *(MUTED if down == 0 else BAD))
+    imgui.text(f"{up} up / {down} down")
+    imgui.pop_style_color()
+
+
+def selftest_chat(prompt: str) -> int:
+    chat = Chat()
+    if not chat.send(prompt):
+        print("send refused", file=sys.stderr)
+        return 2
+    deadline = time.time() + 130
+    while time.time() < deadline:
+        pending, reply, error, took, _ = chat.snapshot()
+        if not pending:
+            print(f"latency={took:.2f}s")
+            if error:
+                print(f"error={error}")
+                return 1
+            print(f"reply={reply}")
+            return 0
+        time.sleep(0.2)
+    print("timeout", file=sys.stderr)
+    return 3
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="ABRASAX HUD v2")
+    ap.add_argument("--no-topmost", action="store_true")
+    ap.add_argument("--scale", type=float, default=None,
+                    help="UI scale; default: saved config, else auto (1.35 on >=3000px primary)")
+    ap.add_argument("--monitor", type=int, default=None,
+                    help="1-based monitor index; top-right of that work area")
+    ap.add_argument("--ask", type=str, default=None, help="send one chat line at startup")
+    ap.add_argument("--frames", type=int, default=0, help="debug: exit after N frames")
+    ap.add_argument("--prove", action="store_true",
+                    help="debug: click-through on at frame 60, off at frame 600")
+    ap.add_argument("--selftest-chat", type=str, default=None,
+                    help="no window: send one chat turn and print the reply")
+    a = ap.parse_args()
+
+    if a.selftest_chat:
+        return selftest_chat(a.selftest_chat)
+
+    cfg = load_config()
+    started = time.time()
+
+    if not glfw.init():
+        log("ERROR glfw.init failed")
+        return 1
+
+    primary = glfw.get_primary_monitor()
+    primary_w = getattr(getattr(glfw.get_video_mode(primary) if primary else None,
+                                "size", None), "width", 1920)
+    auto_scale = 1.35 if primary_w >= 3000 else 1.0
+    if a.scale is not None:
+        scale, scale_src = a.scale, "arg"
+    elif cfg.get("scale"):
+        scale, scale_src = float(cfg["scale"]), "config"
+    else:
+        scale, scale_src = auto_scale, f"auto(primary={primary_w}px)"
+    scale = max(0.75, min(3.0, float(scale)))
+
+    w, h = int(BASE_W * scale), int(BASE_H * scale)
+    log(f"start scale={scale:.2f} ({scale_src}) size={w}x{h} "
+        f"config={'yes' if CFG_PATH.exists() else 'no'} monitor={a.monitor} "
+        f"topmost={not a.no_topmost}")
+
+    glfw.window_hint(glfw.DECORATED, glfw.FALSE)
+    glfw.window_hint(glfw.FLOATING, glfw.TRUE)
+    glfw.window_hint(glfw.TRANSPARENT_FRAMEBUFFER, glfw.TRUE)
+    glfw.window_hint(glfw.RESIZABLE, glfw.FALSE)
+    glfw.window_hint(glfw.SAMPLES, 16)
+    win = glfw.create_window(w, h, "ABRASAX HUD", None, None)
+    if not win:
+        log("ERROR create_window failed")
+        glfw.terminate()
+        return 1
+    glfw.make_context_current(win)
+    glfw.swap_interval(1)
+    hwnd = glfw.get_win32_window(win)
+    if not a.no_topmost:
+        try:
+            topmost(hwnd)
+        except Exception as exc:
+            log(f"topmost failed: {exc}")
+
+    # placement: --monitor > saved position > primary work area top-right
+    mon = monitor_for(a.monitor)
+    if a.monitor is not None:
+        x, y = place_top_right(win, mon, w, h)
+        log(f"placement monitor={a.monitor} work={glfw.get_monitor_workarea(mon)} "
+            f"pos={x},{y}")
+    elif cfg.get("x") is not None and cfg.get("y") is not None:
+        x, y = int(cfg["x"]), int(cfg["y"])
+        if position_visible(x, y, w, h):
+            glfw.set_window_pos(win, x, y)
+            log(f"config restored pos={x},{y} scale={scale:.2f} "
+                f"click_through={bool(cfg.get('click_through'))}")
+        else:
+            old = (x, y)
+            x, y = place_top_right(win, mon, w, h)
+            log(f"config pos {old} offscreen -> reset to {x},{y}")
+    else:
+        x, y = place_top_right(win, mon, w, h)
+        log(f"config default pos={x},{y} work={glfw.get_monitor_workarea(mon)}")
+
+    imgui.create_context()
+    io = imgui.get_io()
+    font_loaded = False
+    if Path(FONT_FILE).exists():
+        try:
+            io.fonts.add_font_from_file_ttf(FONT_FILE, 13.0 * scale,
+                                            glyph_ranges=io.fonts.get_glyph_ranges_default())
+            font_loaded = True
+            log(f"font consola {13.0 * scale:.1f}px")
+        except Exception as exc:
+            log(f"font load failed: {exc}")
+    if not font_loaded:
+        io.fonts.add_font_default()
+        io.font_global_scale = scale
+    apply_style(scale)
+    renderer = GlfwRenderer(win, attach_callbacks=False)
+
+    live = Live()
+    chat = Chat()
+    tex = make_texture()
+    last_upload = 0.0
+    visible = True
+    dragging = False
+    drag_off = (0.0, 0.0)
+    click_through = False
+    focus_chat = False
+    chat_buf = ""
+    last_reply_serial = 0
+    last_toggle = 0.0
+    hk_l = False
+    hk_h = False
+    frames = 0
+
+    register_hotkey(1, MOD_CONTROL | MOD_SHIFT, VK_L)
+    register_hotkey(2, MOD_CONTROL | MOD_SHIFT, VK_H)
+
+    def save_state() -> None:
+        try:
+            px, py = glfw.get_window_pos(win)
+            cfg.update({"x": int(px), "y": int(py), "scale": float(scale),
+                        "click_through": bool(click_through)})
+            save_config(cfg)
+            log(f"config saved x={int(px)} y={int(py)} scale={scale:.2f} "
+                f"click_through={click_through}")
+        except Exception as exc:
+            log(f"config save failed: {exc}")
+
+    def apply_click_through(on: bool) -> None:
+        nonlocal click_through, hk_l, last_toggle
+        now = time.time()
+        if now - last_toggle < 0.35:
+            return
+        last_toggle = now
+        click_through = on
+        try:
+            ex = set_click_through(hwnd, on)
+            log(f"click_through={on} exstyle=0x{ex & 0xFFFFFFFF:08x}")
+        except Exception as exc:
+            log(f"click_through failed: {exc}")
+        if on and not hk_l:
+            hk_l = register_hotkey(3, MOD_CONTROL, VK_L)
+        elif not on and hk_l:
+            unregister_hotkey(3)
+            hk_l = False
+        save_state()
+
+    def set_visible(on: bool) -> None:
+        nonlocal visible, hk_h, last_toggle
+        now = time.time()
+        if now - last_toggle < 0.35:
+            return
+        last_toggle = now
+        visible = on
+        if on:
+            glfw.show_window(win)
+            glfw.set_window_attrib(win, glfw.FLOATING, True)
+            if not a.no_topmost:
+                topmost(hwnd)
+            if hk_h:
+                unregister_hotkey(4)
+                hk_h = False
+        else:
+            glfw.hide_window(win)
+            if not hk_h:
+                hk_h = register_hotkey(4, MOD_CONTROL, VK_H)
+        log(f"visible={on}")
+
+    def on_key(_w, key, _sc, action, _mods):
+        if action != glfw.PRESS:
+            return
+        ctrl = (glfw.get_key(_w, glfw.KEY_LEFT_CONTROL) == glfw.PRESS or
+                glfw.get_key(_w, glfw.KEY_RIGHT_CONTROL) == glfw.PRESS)
+        shift = (glfw.get_key(_w, glfw.KEY_LEFT_SHIFT) == glfw.PRESS or
+                 glfw.get_key(_w, glfw.KEY_RIGHT_SHIFT) == glfw.PRESS)
+        if ctrl and key == glfw.KEY_L:
+            apply_click_through(not click_through)
+        elif ctrl and shift and key == glfw.KEY_H:
+            set_visible(not visible)
+        elif ctrl and key == glfw.KEY_H:
+            set_visible(not visible)
+        elif ctrl and key == glfw.KEY_T:
+            glfw.set_window_attrib(win, glfw.FLOATING,
+                                   not glfw.get_window_attrib(win, glfw.FLOATING))
+        elif key == glfw.KEY_ESCAPE:
+            glfw.set_window_should_close(win, True)
+
+    glfw.set_key_callback(win, on_key)
+
+    # restore the persisted click-through preference (adds the global escape hatch)
+    if cfg.get("click_through"):
+        apply_click_through(True)
+
+    if a.ask:
+        chat.send(a.ask)
+
+    try:
+        while not glfw.window_should_close(win):
+            for hid in pump_hotkeys():
+                if hid in (1, 3):
+                    apply_click_through(not click_through)
+                elif hid in (2, 4):
+                    set_visible(not visible)
+
+            glfw.poll_events()
+            renderer.process_inputs()
+            fb_w, fb_h = glfw.get_framebuffer_size(win)
+            gl.glViewport(0, 0, fb_w, fb_h)
+            gl.glClearColor(0.0, 0.0, 0.0, 0.0)
+            gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+
+            imgui.new_frame()
+            imgui.set_next_window_position(0, 0)
+            imgui.set_next_window_size(fb_w, fb_h)
+            flags = (imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_NO_RESIZE |
+                     imgui.WINDOW_NO_MOVE | imgui.WINDOW_NO_SCROLLBAR |
+                     imgui.WINDOW_NO_COLLAPSE | imgui.WINDOW_NO_SAVED_SETTINGS |
+                     imgui.WINDOW_NO_BRING_TO_FRONT_ON_FOCUS)
+            imgui.begin("hud", flags=flags)
+
+            state, grid, err, services = live.snapshot()
+            pending, reply, chat_error, chat_took, reply_serial = chat.snapshot()
+            syn = (state or {}).get("synapses") or {}
+            io_ = imgui.get_io()
+
+            # -- header --------------------------------------------------
+            imgui.push_style_color(imgui.COLOR_TEXT, *ACCENT)
+            imgui.text("ABRASAX // HUD")
+            imgui.pop_style_color()
+            imgui.same_line()
+            imgui.push_style_color(imgui.COLOR_TEXT, *(BAD if err else OK))
+            imgui.text("•" if not err else "×")
+            imgui.pop_style_color()
+            imgui.same_line()
+            imgui.push_style_color(imgui.COLOR_TEXT, *MUTED)
+            imgui.text(err or f"{(state or {}).get('backend', 'n/a')}")
+            imgui.pop_style_color()
+
+            imgui.separator()
+            avail_w = imgui.get_content_region_available()[0]
+            half = (avail_w - 12 * scale) / 2
+
+            # -- brain field + metrics -----------------------------------
+            imgui.begin_child("tex", width=half, height=half + 12 * scale, border=False)
+            if grid is not None and time.time() - last_upload > 1.5:
+                upload(tex, grid)
+                last_upload = time.time()
+            if grid is not None:
+                side = half - 6 * scale
+                imgui.image(tex, side, side)
+            else:
+                imgui.text_disabled("no field")
+            imgui.end_child()
+
+            imgui.same_line()
+            imgui.begin_child("stats", width=0, height=half + 12 * scale, border=False)
+            rows = [
+                ("steps", f"{(state or {}).get('steps', '—')}"),
+                ("nodes", f"{(state or {}).get('nodes', '—'):,}"
+                 if (state or {}).get("nodes") else "—"),
+                ("synapses", f"{syn.get('edges', '—'):,}" if syn.get("edges") else "—"),
+                ("reciprocal", f"{syn.get('reciprocal_directed_frac', '—')}"),
+                ("inhibitory", f"{syn.get('inhibitory_edge_frac', '—')}"),
+                ("hubs 50%", f"{syn.get('top_cell_frac_for_50pct_of_synapses', '—')}"),
+                ("modulator", f"{syn.get('modulator_total', '—')}"),
+                ("mean state", f"{(state or {}).get('mean_state', '—')}"),
+            ]
+            for k, v in rows:
+                imgui.push_style_color(imgui.COLOR_TEXT, *MUTED)
+                imgui.text(k)
+                imgui.pop_style_color()
+                imgui.same_line(half - 92 * scale)
+                imgui.text(str(v))
+            imgui.end_child()
+
+            # -- step buttons --------------------------------------------
+            imgui.spacing()
+            bw = 78 * scale
+            if imgui.button("step 1", width=bw):
+                threading.Thread(target=post_step, args=(1,), daemon=True).start()
+            imgui.same_line()
+            if imgui.button("step 25", width=bw):
+                threading.Thread(target=post_step, args=(25,), daemon=True).start()
+            imgui.same_line()
+            if imgui.button("refresh", width=bw):
+                live.kick()
+            imgui.same_line()
+            imgui.push_style_color(imgui.COLOR_TEXT, *MUTED)
+            imgui.text(f"{(state or {}).get('grid_sha256', '')[:10]}")
+            imgui.pop_style_color()
+
+            # -- service dots --------------------------------------------
+            draw_service_dots(services, scale)
+
+            # -- chat ----------------------------------------------------
+            imgui.separator()
+            imgui.push_style_color(imgui.COLOR_TEXT, *MUTED)
+            imgui.text(f"chat · :9001 · {CHAT_MODEL}")
+            if chat_took and not pending and not chat_error:
+                imgui.same_line()
+                imgui.text_disabled(f"{chat_took:.1f}s")
+            imgui.pop_style_color()
+
+            btn_w = 54 * scale
+            if focus_chat:
+                imgui.set_keyboard_focus_here()
+                focus_chat = False
+            imgui.push_item_width(avail_w - btn_w - 8 * scale)
+            changed, chat_buf = imgui.input_text("##chat", chat_buf, 512,
+                                                 imgui.INPUT_TEXT_ENTER_RETURNS_TRUE)
+            imgui.pop_item_width()
+            imgui.same_line()
+            pressed = imgui.button("send", width=btn_w)
+            if (pressed or changed) and chat_buf.strip():
+                if chat.send(chat_buf):
+                    chat_buf = ""
+                    focus_chat = True
+
+            reply_h = 96.0 * scale
+            imgui.begin_child("reply", width=0, height=reply_h, border=True)
+            imgui.push_text_wrap_pos(0.0)
+            if pending:
+                imgui.push_style_color(imgui.COLOR_TEXT, *ACCENT)
+                imgui.text("thinking…")
+                imgui.pop_style_color()
+            elif chat_error:
+                imgui.push_style_color(imgui.COLOR_TEXT, *BAD)
+                imgui.text(f"error: {chat_error}")
+                imgui.pop_style_color()
+            elif reply:
+                imgui.text(reply)
+                if reply_serial != last_reply_serial:
+                    last_reply_serial = reply_serial
+                    imgui.set_scroll_y(imgui.get_scroll_max_y())
+            else:
+                imgui.text_disabled("ask the runtime — enter sends")
+            imgui.pop_text_wrap_pos()
+            imgui.end_child()
+
+            # -- footer --------------------------------------------------
+            imgui.separator()
+            imgui.push_style_color(imgui.COLOR_TEXT, *(WARN if click_through else MUTED))
+            imgui.text("[PASSTHROUGH]" if click_through else "[interactive]")
+            imgui.pop_style_color()
+            imgui.same_line()
+            imgui.push_style_color(imgui.COLOR_TEXT, *MUTED)
+            imgui.text("CTRL+L toggle · CTRL+H hide · ESC quit")
+            imgui.pop_style_color()
+            nup = sum(1 for s in services if s["up"])
+            imgui.push_style_color(imgui.COLOR_TEXT, *MUTED)
+            imgui.text(f"{nup} up · scale {scale:.2f} · uptime "
+                       f"{int(time.time() - started)}s · "
+                       f"ptr {io_.mouse_pos[0]:.0f},{io_.mouse_pos[1]:.0f}")
+            imgui.pop_style_color()
+
+            content_h = (imgui.get_cursor_pos()[1] +
+                         imgui.get_style().window_padding[1] + 2)
+
+            # drag the whole panel by empty space (only when interactive)
+            if imgui.is_mouse_dragging(0) and not imgui.is_any_item_active():
+                mx, my = glfw.get_cursor_pos(win)
+                wx, wy = glfw.get_window_pos(win)
+                if not dragging:
+                    dragging = True
+                    drag_off = (mx, my)
+                glfw.set_window_pos(win, int(wx + mx - drag_off[0]),
+                                    int(wy + my - drag_off[1]))
+            elif dragging:
+                dragging = False
+                save_state()
+
+            imgui.end()
+            imgui.render()
+            renderer.render(imgui.get_draw_data())
+            glfw.swap_buffers(win)
+            frames += 1
+
+            if a.prove and frames == 60:
+                apply_click_through(True)
+            elif a.prove and frames == 600:
+                apply_click_through(False)
+
+            # grow once if the content does not fit (font/scale drift insurance)
+            if content_h > fb_h - 2 and frames <= 60:
+                new_h = int(math.ceil(fb_h + (content_h - fb_h) + 4))
+                log(f"autosize content={content_h:.1f} fb={fb_h} -> {fb_w}x{new_h}")
+                glfw.set_window_size(win, fb_w, new_h)
+
+            if a.frames and frames >= a.frames:
+                break
+    finally:
+        live.stop = True
+        save_state()
+        for hid in (1, 2, 3, 4):
+            unregister_hotkey(hid)
+        try:
+            renderer.shutdown()
+        except Exception:
+            pass
+        glfw.terminate()
+        log(f"exit after {frames} frames")
+
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except SystemExit:
+        raise
+    except Exception:
+        log("FATAL\n" + traceback.format_exc())
+        raise

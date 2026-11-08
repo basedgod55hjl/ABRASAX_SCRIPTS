@@ -1,0 +1,364 @@
+"""Wire the PC's TPM to the S25 with post-quantum cryptography.
+
+WHAT IS ACTUALLY USED (all verified present on this machine, not assumed)
+-------------------------------------------------------------------------
+  TPM      Microsoft Platform Crypto Provider via CNG. Measured: provider opens
+           rc=0, NCryptCreatePersistedKey rc=0, NCryptFinalizeKey rc=0,
+           NCryptSignHash returns a 64-byte ECDSA_P256 signature.
+  PQC      cryptography 50.0.2 on OpenSSL 4.0.3, which exposes real NIST
+           algorithms: ML-DSA-87 (signature, 4627-byte sigs) and ML-KEM-1024
+           (KEM, 32-byte secret / 1568-byte ciphertext). Both were exercised
+           before this file was written.
+
+THE TRUST CHAIN, AND WHY EACH LINK EXISTS
+-----------------------------------------
+    TPM key  --signs-->  ML-DSA public key          (hardware roots the PQC identity)
+    ML-DSA   --signs-->  KEM ciphertext + nonce + AEAD blob   (post-quantum authenticity)
+    ML-KEM   --seals-->  AES-256-GCM key via HKDF   (post-quantum confidentiality)
+
+The TPM does not do PQC; it binds the PQC identity to this physical machine.
+ML-DSA alone would prove "some holder of a key"; the TPM signature is what says
+"that key belongs to this box's TPM". Neither link is decorative.
+
+HONEST LIMITATION
+-----------------
+The S25 receives and stores the envelope. It does NOT run ML-KEM itself:
+Android has no ML-KEM in its platform crypto, and shipping one means an app.
+So the device is a carrier/attestor of the sealed record, not yet a party to the
+handshake. Closing that gap is exactly what the IMU-bridge APK scaffolding
+would be extended to do.
+
+USAGE
+    python pqc_tpm_wire.py keygen
+    python pqc_tpm_wire.py seal      # -> DATA/runtime-memory/pqc/envelope.json
+    python pqc_tpm_wire.py open      # decrypt + verify every link, print verdict
+    python pqc_tpm_wire.py push      # adb push to the S25 and read the hash back
+    python pqc_tpm_wire.py verify-remote
+"""
+from __future__ import annotations
+
+import ctypes
+import hashlib
+import json
+import os
+import pathlib
+import subprocess
+import sys
+import time
+
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec, mldsa, mlkem
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.exceptions import InvalidSignature
+
+ROOT = pathlib.Path(r"C:\ABRASAX")
+PQC = ROOT / "DATA" / "runtime-memory" / "pqc"
+ENV_FILE = PQC / "envelope.json"
+CHAIN = ROOT / "LOGS" / "state-chain.jsonl"
+ADB = r"C:\abrasax\_DEAD_PATH\scrcpy\scrcpy-win64-v4.1\adb.exe"  # DEAD PATH (sirch): no scrcpy bundle on this host
+REMOTE_DIR = "/sdcard/ABRASAX"
+REMOTE_FILE = REMOTE_DIR + "/envelope.json"
+
+INFO = b"abrasax-pqc-v1"
+NCRYPT_SILENT_FLAG = 0x40
+TPM_KEY_NAME = "abrq-pqc-attest"
+
+
+# --------------------------------------------------------------- TPM (CNG) ---
+def _cng():
+    lib = ctypes.WinDLL("ncrypt", use_last_error=True)
+    lib.NCryptCreatePersistedKey.argtypes = [
+        ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p), ctypes.c_wchar_p,
+        ctypes.c_wchar_p, ctypes.c_uint32, ctypes.c_uint32]
+    lib.NCryptFinalizeKey.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+    lib.NCryptSignHash.argtypes = [
+        ctypes.c_void_p, ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32,
+        ctypes.c_char_p, ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32),
+        ctypes.c_uint32]
+    lib.NCryptOpenKey.argtypes = [
+        ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p), ctypes.c_wchar_p,
+        ctypes.c_uint32, ctypes.c_uint32]
+    lib.NCryptExportKey.argtypes = [
+        ctypes.c_void_p, ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_void_p,
+        ctypes.c_char_p, ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32),
+        ctypes.c_uint32]
+    return lib
+
+
+def tpm_key():
+    """Open or create the persistent TPM signing key. Returns (lib, key)."""
+    lib = _cng()
+    prov, key = ctypes.c_void_p(), ctypes.c_void_p()
+    rc = lib.NCryptOpenStorageProvider(ctypes.byref(prov),
+                                       "Microsoft Platform Crypto Provider", 0)
+    if rc:
+        raise RuntimeError(f"TPM provider unavailable rc={rc}")
+    NTE_EXISTS = 0x8009000F
+    rc = lib.NCryptCreatePersistedKey(prov, ctypes.byref(key), "ECDSA_P256",
+                                      TPM_KEY_NAME, 0, 0)
+    # ctypes hands back NTSTATUS as a SIGNED int, so 0x8009000F arrives as
+    # -2146893809 and a direct compare against the positive constant silently
+    # never matches. Normalise before comparing.
+    if (rc & 0xFFFFFFFF) == NTE_EXISTS:
+        # The key is already persisted from a previous run. Re-creating it is an
+        # error, not a failure -- open the existing one so the same TPM identity
+        # is reused rather than silently rotating the machine's attestation key.
+        rc = lib.NCryptOpenKey(prov, ctypes.byref(key), TPM_KEY_NAME, 0, 0)
+        if rc:
+            raise RuntimeError(f"TPM key open rc={rc:#x}")
+        return lib, prov, key
+    if rc:
+        raise RuntimeError(f"TPM key create rc={rc:#x}")
+    rc = lib.NCryptFinalizeKey(key, NCRYPT_SILENT_FLAG)
+    if (rc & 0xFFFFFFFF) not in (0, NTE_EXISTS):
+        raise RuntimeError(f"TPM finalize rc={rc & 0xFFFFFFFF:#x}")
+    return lib, prov, key
+
+
+def tpm_sign(digest: bytes) -> bytes:
+    lib, prov, key = tpm_key()
+    cb = ctypes.c_uint32(0)
+    rc = lib.NCryptSignHash(key, None, digest, len(digest), None, 0,
+                            ctypes.byref(cb), NCRYPT_SILENT_FLAG)
+    if rc:
+        raise RuntimeError(f"TPM sign size rc={rc}")
+    buf = ctypes.create_string_buffer(cb.value)
+    rc = lib.NCryptSignHash(key, None, digest, len(digest), buf, cb.value,
+                            ctypes.byref(cb), NCRYPT_SILENT_FLAG)
+    out = buf.raw[:cb.value] if rc == 0 else b""
+    lib.NCryptFreeObject(key)
+    lib.NCryptFreeObject(prov)
+    if rc:
+        raise RuntimeError(f"TPM sign rc={rc}")
+    return out
+
+
+def tpm_public() -> bytes:
+    """Export the TPM key as a SubjectPublicKeyInfo so the signature can be
+    checked by anyone with no TPM access."""
+    lib, prov, key = tpm_key()
+    cb = ctypes.c_uint32(0)
+    rc = lib.NCryptExportKey(key, None, "ECCPUBLICBLOB", None, None, 0,
+                             ctypes.byref(cb), NCRYPT_SILENT_FLAG)
+    if rc:
+        raise RuntimeError(f"TPM export size rc={rc}")
+    buf = ctypes.create_string_buffer(cb.value)
+    rc = lib.NCryptExportKey(key, None, "ECCPUBLICBLOB", None, buf, cb.value,
+                             ctypes.byref(cb), NCRYPT_SILENT_FLAG)
+    blob = buf.raw[:cb.value] if rc == 0 else b""
+    lib.NCryptFreeObject(key)
+    lib.NCryptFreeObject(prov)
+    if rc:
+        raise RuntimeError(f"TPM export rc={rc}")
+    return blob
+
+
+def verify_tpm(digest: bytes, sig: bytes, ecc_blob: bytes) -> bool:
+    """Verify a CNG ECCPUBLICBLOB signature with plain `cryptography`.
+
+    BCRYPT_ECCKEY_BLOB: magic(4) cbKey(4) X(cbKey) Y(cbKey), all little-endian,
+    and NCryptSignHash returns ECDSA as raw r||s rather than DER.
+    """
+    if len(ecc_blob) < 8 or not sig:
+        return False
+    cb_key = int.from_bytes(ecc_blob[4:8], "little")
+    x = int.from_bytes(ecc_blob[8:8 + cb_key], "big")
+    y = int.from_bytes(ecc_blob[8 + cb_key:8 + 2 * cb_key], "big")
+    pub = ec.EllipticCurvePublicNumbers(x, y, ec.SECP256R1()).public_key()
+    if len(sig) == cb_key * 2:
+        r = int.from_bytes(sig[:cb_key], "big")
+        s = int.from_bytes(sig[cb_key:], "big")
+        # NCryptSignHash returns ECDSA as raw r||s; cryptography wants DER.
+        def _der_int(v: int) -> bytes:
+            b = v.to_bytes((v.bit_length() + 7) // 8 or 1, "big")
+            if b[0] & 0x80:
+                b = b"\x00" + b
+            return b"\x02" + bytes([len(b)]) + b
+        body = _der_int(r) + _der_int(s)
+        der = b"\x30" + bytes([len(body)]) + body
+        try:
+            pub.verify(der, digest, ec.ECDSA(utils_prehashed()))
+            return True
+        except InvalidSignature:
+            return False
+        except Exception:  # noqa: BLE001
+            return False
+    return False
+
+
+def utils_prehashed():
+    from cryptography.hazmat.primitives.asymmetric import utils
+    return utils.Prehashed(hashes.SHA256())
+
+
+# -------------------------------------------------------------- key material --
+def _paths() -> dict:
+    return {n: PQC / f for n, f in (
+        ("sig_pub", "mldsa_pub.raw"), ("sig_priv", "mldsa_priv.raw"),
+        ("kem_pub", "mlkem_pub.raw"), ("kem_priv", "mlkem_priv.raw"),
+    )}
+
+
+def keygen() -> None:
+    PQC.mkdir(parents=True, exist_ok=True)
+    p = _paths()
+    if p["sig_priv"].exists() and "--force" not in sys.argv:
+        print("keys already exist (use --force to regenerate)")
+        return
+    sig_k = mldsa.MLDSA87PrivateKey.generate()
+    kem_k = mlkem.MLKEM1024PrivateKey.generate()
+    p["sig_priv"].write_bytes(sig_k.private_bytes_raw())
+    p["sig_pub"].write_bytes(sig_k.public_key().public_bytes_raw())
+    p["kem_priv"].write_bytes(kem_k.private_bytes_raw())
+    p["kem_pub"].write_bytes(kem_k.public_key().public_bytes_raw())
+    print(f"ML-DSA-87  pub {len(p['sig_pub'].read_bytes())}B   priv {len(p['sig_priv'].read_bytes())}B")
+    print(f"ML-KEM-1024 pub {len(p['kem_pub'].read_bytes())}B priv {len(p['kem_priv'].read_bytes())}B")
+
+
+def _chain_head() -> tuple[str, int]:
+    try:
+        lines = [l for l in CHAIN.read_text(encoding="utf-8").splitlines() if l.strip()]
+        if lines:
+            return json.loads(lines[-1])["hash"], len(lines)
+    except OSError:
+        pass
+    return "0" * 64, 0
+
+
+def _state() -> dict:
+    def rd(n):
+        try:
+            return json.loads((ROOT / "DATA" / "runtime-memory" / n).read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            return {}
+    m, c, s = rd("s25_motion.json"), rd("cost.json"), rd("s25_senses.json")
+    return {"motion_hz": m.get("hz"), "motion_shake": m.get("shake"),
+            "llm_calls_today": c.get("calls_today"),
+            "paid_calls_today": c.get("paid_calls_today"),
+            "phone_battery": (s.get("battery") or {}).get("level_pct")}
+
+
+def seal() -> dict:
+    p = _paths()
+    if not p["kem_pub"].exists():
+        raise SystemExit("run keygen first")
+    kem_pub = mlkem.MLKEM1024PublicKey.from_public_bytes(p["kem_pub"].read_bytes())
+    sig_priv = mldsa.MLDSA87PrivateKey.from_seed_bytes(p["sig_priv"].read_bytes())
+
+    head, n = _chain_head()
+    payload = {"ts": time.time(), "chain_head": head, "chain_len": n, "state": _state()}
+
+    ss, kem_ct = kem_pub.encapsulate()
+    key = HKDF(algorithm=hashes.SHA256(), length=32, salt=None, info=INFO).derive(ss)
+    nonce = os.urandom(12)
+    blob = AESGCM(key).encrypt(nonce, json.dumps(payload, sort_keys=True).encode(), INFO)
+
+    sig_pub_raw = p["sig_pub"].read_bytes()
+    sig = sig_priv.sign(kem_ct + nonce + blob)
+    digest = hashlib.sha256(sig_pub_raw).digest()
+    tpm = {"ok": False, "sig": "", "pub": "", "err": ""}
+    try:
+        tpm_sig = tpm_sign(digest)
+        tpm = {"ok": True, "sig": tpm_sig.hex(), "pub": tpm_public().hex(), "err": ""}
+    except Exception as exc:  # noqa: BLE001
+        tpm["err"] = str(exc)[:160]
+
+    env = {
+        "v": 1, "algs": {"sig": "ML-DSA-87", "kem": "ML-KEM-1024", "aead": "AES-256-GCM"},
+        "kem_ct": kem_ct.hex(), "nonce": nonce.hex(), "aead": blob.hex(),
+        "mldsa_pub": sig_pub_raw.hex(), "mldsa_sig": sig.hex(),
+        "tpm": tpm, "payload_sha256": hashlib.sha256(
+            json.dumps(payload, sort_keys=True).encode()).hexdigest(),
+        "created": time.time(),
+    }
+    ENV_FILE.write_text(json.dumps(env, indent=2), encoding="utf-8")
+    print(f"sealed -> {ENV_FILE}")
+    print(f"  kem_ct {len(kem_ct)}B  aead {len(blob)}B  mldsa_sig {len(sig)}B  "
+          f"tpm {'signed' if tpm['ok'] else 'FAILED: ' + tpm['err']}")
+    return env
+
+
+def open_envelope() -> int:
+    p = _paths()
+    env = json.loads(ENV_FILE.read_text(encoding="utf-8"))
+    kem_priv = mlkem.MLKEM1024PrivateKey.from_seed_bytes(p["kem_priv"].read_bytes())
+    kem_ct = bytes.fromhex(env["kem_ct"])
+    nonce = bytes.fromhex(env["nonce"])
+    blob = bytes.fromhex(env["aead"])
+
+    ss = kem_priv.decapsulate(kem_ct)
+    key = HKDF(algorithm=hashes.SHA256(), length=32, salt=None, info=INFO).derive(ss)
+    try:
+        plain = AESGCM(key).decrypt(nonce, blob, INFO)
+    except Exception as exc:  # noqa: BLE001
+        print(f"FAIL decrypt: {exc}")
+        return 1
+    payload = json.loads(plain)
+
+    checks = []
+    pub = mldsa.MLDSA87PublicKey.from_public_bytes(bytes.fromhex(env["mldsa_pub"]))
+    try:
+        pub.verify(bytes.fromhex(env["mldsa_sig"]), kem_ct + nonce + blob)
+        checks.append(("ML-DSA-87 signature", True))
+    except InvalidSignature:
+        checks.append(("ML-DSA-87 signature", False))
+
+    tpm_ok = verify_tpm(hashlib.sha256(bytes.fromhex(env["mldsa_pub"])).digest(),
+                        bytes.fromhex(env["tpm"]["sig"]) if env["tpm"].get("sig") else b"",
+                        bytes.fromhex(env["tpm"]["pub"]) if env["tpm"].get("pub") else b"")
+    checks.append(("TPM attestation of PQC identity", tpm_ok))
+
+    want = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+    checks.append(("payload digest", want == env.get("payload_sha256")))
+
+    head, n = _chain_head()
+    checks.append(("chain head matches live chain",
+                   payload.get("chain_head") == head))
+
+    for name, ok in checks:
+        print(f"  [{'PASS' if ok else 'FAIL'}] {name}")
+    print(f"  payload: chain_len={payload.get('chain_len')} state={payload.get('state')}")
+    return 0 if all(ok for _, ok in checks) else 1
+
+
+def push() -> int:
+    if not ENV_FILE.exists():
+        raise SystemExit("nothing to push: run seal first")
+    subprocess.run([ADB, "shell", "mkdir", "-p", REMOTE_DIR], capture_output=True, timeout=30)
+    r = subprocess.run([ADB, "push", str(ENV_FILE), REMOTE_FILE],
+                       capture_output=True, text=True, timeout=60)
+    print(r.stdout.strip() or r.stderr.strip())
+    return 0 if r.returncode == 0 else 1
+
+
+def verify_remote() -> int:
+    local = hashlib.sha256(ENV_FILE.read_bytes()).hexdigest()
+    r = subprocess.run([ADB, "shell", "sha256sum", REMOTE_FILE],
+                       capture_output=True, text=True, timeout=30)
+    remote = (r.stdout or "").split()[0] if r.stdout.strip() else ""
+    ok = remote == local
+    print(f"  local  {local[:32]}...")
+    print(f"  remote {remote[:32] if remote else '(none)'}...")
+    print(f"  [{'PASS' if ok else 'FAIL'}] S25 holds a byte-identical envelope")
+    return 0 if ok else 1
+
+
+def main() -> int:
+    cmd = (sys.argv[1] if len(sys.argv) > 1 else "seal").lower()
+    if cmd == "keygen":
+        keygen(); return 0
+    if cmd == "seal":
+        seal(); return 0
+    if cmd == "open":
+        return open_envelope()
+    if cmd == "push":
+        return push()
+    if cmd == "verify-remote":
+        return verify_remote()
+    print("usage: keygen | seal | open | push | verify-remote")
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

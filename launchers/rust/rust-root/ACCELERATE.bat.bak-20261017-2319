@@ -1,0 +1,57 @@
+@echo off
+title OSIRISBLXCK — SYSTEM ACCELERATOR
+cd /d C:\Users\sirch\Desktop\ABRASAX\repos\ABRASAX
+
+echo ╔══════════════════════════════════════════════════════════════╗
+echo ║     OSIRISBLXCK SYSTEM ACCELERATOR                         ║
+echo ║     PRIMAL_HEX: 4f5349524953424c58434b                     ║
+echo ║     Make it FAST. Make it SMOOTH. Make it FLY.             ║
+echo ╚══════════════════════════════════════════════════════════════╝
+echo.
+
+:: [1] Set High Performance Power Plan
+echo [1/6] Setting High Performance power plan...
+powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>nul
+
+:: [2] GPU Persistence Mode
+echo [2/6] Enabling GPU persistence mode...
+nvidia-smi -pm 1 2>nul
+
+:: [3] Set Process Priorities
+echo [3/6] Setting process priorities...
+for /f "skip=2 tokens=2" %%a in ('tasklist /FI "IMAGENAME eq abrasax.exe" /FO CSV') do (
+    wmic process where processid="%%a" CALL setpriority 64 2>nul
+)
+for /f "skip=2 tokens=2" %%a in ('tasklist /FI "IMAGENAME eq abrasaxd.exe" /FO CSV') do (
+    wmic process where processid="%%a" CALL setpriority 16384 2>nul
+)
+
+:: [4] Kill Idle Processes
+echo [4/6] Killing idle processes...
+for /f "skip=3 tokens=2" %%a in ('tasklist /FI "MEMUSAGE lt 1024" /FO CSV') do (
+    wmic process where processid="%%a" delete 2>nul
+)
+
+:: [5] Generate Custom XOR GGUF
+echo [5/6] Building custom XOR-seeded GGUF...
+start /B /MIN "GGUF-BUILD" "C:\Users\sirch\Desktop\ABRASAX\repos\ABRASAX\abrasax_rs\target\release\abrasax.exe" xor-gguf
+ping -n 3 127.0.0.1 >nul
+
+:: [6] Start Accelerator Daemon
+echo [6/6] Starting live accelerator daemon...
+start /B /MIN "ACCELERATOR" "C:\Users\sirch\Desktop\ABRASAX\repos\ABRASAX\.venv\Scripts\python.exe" "C:\Users\sirch\Desktop\ABRASAX\repos\ABRASAX\system_accelerator.py"
+
+echo.
+echo ╔══════════════════════════════════════════════════════════════╗
+echo ║     SYSTEM ACCELERATED                                      ║
+echo ║                                                             ║
+echo ║     • High Performance power plan                           ║
+echo ║     • GPU persistence mode enabled                          ║
+echo ║     • Process priorities set                                ║
+echo ║     • Idle processes killed                                 ║
+echo ║     • Custom XOR GGUF building                              ║
+echo ║     • Live optimizer daemon running                         ║
+echo ║                                                             ║
+echo ║     φ = 1.618033988749895 (UNBOUNDED)                       ║
+echo ║     PRIMAL_HEX: 4f5349524953424c58434b                     ║
+echo ╚══════════════════════════════════════════════════════════════╝

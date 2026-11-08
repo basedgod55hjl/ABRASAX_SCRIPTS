@@ -1,0 +1,106 @@
+"""Verify section 34's claim: is dsp_ippv2 genuinely unsigned, or stripped?
+
+Report claim: "dsp_ippv2 is UNSIGNED -- the signature slot table disproves the
+signed-then-modified assumption; its siblings carry CodeDirectory 0xFADE0C02 +
+Requirements 0xFADE0C01, it does not."
+
+Two different things, and the distinction matters:
+  * LC_CODE_SIGNATURE absent entirely  -> never signed, or signature blob removed
+  * LC_CODE_SIGNATURE present but the SuperBlob magic is missing -> damaged
+
+Also: an EMPTY __LINKEDIT (as my earlier parse reported 0 for all four) would be
+a parser bug, so measure the real segment sizes here by reading the 64-bit
+segment_command properly: segname[16] vmaddr[8] vmsize[8] fileoff[8] filesize[8].
+"""
+from __future__ import annotations
+
+import struct
+from pathlib import Path
+# DEAD PATH (sirch): original C:\Users\sirch\_WORK\fl_unpack dataset has no local equivalent on this host.
+
+BASE = Path(r"C:\abrasax\_DEAD_PATH\fl_unpack\Library\Audio\Plug-Ins\VST"
+            r"\FL Studio VSTi.vst\Contents")
+SHARED = BASE / "Resources" / "Shared"
+
+FAT_MAGIC = 0xCAFEBABE
+MH_MAGIC_64 = 0xFEEDFACF
+LC_SEGMENT_64 = 0x19
+LC_CODE_SIGNATURE = 0x1D
+LC_UUID = 0x1B
+CSMAGIC_EMBEDDED_SIGNATURE = 0xFADE0CC0
+CPU = {0x01000007: "x86_64", 0x0100000C: "arm64"}
+
+
+def slices(fh):
+    magic = struct.unpack(">I", fh.read(4))[0]
+    if magic != FAT_MAGIC:
+        return []
+    n = struct.unpack(">I", fh.read(4))[0]
+    out = []
+    for _ in range(n):
+        ct, _sub, off, size, _al = struct.unpack(">iiIII", fh.read(20))
+        out.append((CPU.get(ct, hex(ct)), off, size))
+    return out
+
+
+def walk(fh, off):
+    fh.seek(off)
+    if struct.unpack("<I", fh.read(4))[0] != MH_MAGIC_64:
+        return None
+    _ct, _sub, _ft, ncmds, _sz, _fl = struct.unpack("<iiIIII", fh.read(24))
+    pos = fh.tell()
+    segs, codesig, uuid = {}, None, None
+    for _ in range(ncmds):
+        fh.seek(pos)
+        hdr = fh.read(8)
+        if len(hdr) < 8:
+            break
+        cmd, cmdsize = struct.unpack("<II", hdr)
+        if cmdsize < 8:
+            break
+        body = fh.read(cmdsize - 8)
+        if cmd == LC_SEGMENT_64 and len(body) >= 64:
+            name = body[:16].split(b"\0")[0].decode("ascii", "replace")
+            # segname16 | vmaddr8 | vmsize8 | fileoff8 | filesize8 | ...
+            fileoff, filesize = struct.unpack("<QQ", body[40:56])
+            segs[name] = {"fileoff": fileoff, "filesize": filesize}
+        elif cmd == LC_CODE_SIGNATURE and len(body) >= 16:
+            dataoff, datasize = struct.unpack("<II", body[:8])
+            codesig = {"dataoff": dataoff, "datasize": datasize}
+        elif cmd == LC_UUID and len(body) >= 16:
+            u = body[:16]
+            uuid = f"{u[0:4].hex()}-{u[4:6].hex()}-{u[6:8].hex()}-{u[8:10].hex()}-{u[10:16].hex()}"
+        pos += cmdsize
+    return {"segs": segs, "codesig": codesig, "uuid": uuid}
+
+
+def main() -> int:
+    print(f"{'binary':28} {'arch':8} {'__TEXT':>12} {'__LINKEDIT':>12} "
+          f"{'LC_CODE_SIGNATURE':>18} {'blob magic':>12}")
+    for p in sorted(SHARED.glob("*.dylib")) + [BASE / "MacOS" / "vstplugin"]:
+        if not p.exists():
+            continue
+        with p.open("rb") as fh:
+            for arch, off, _sz in slices(fh):
+                d = walk(fh, off)
+                if not d:
+                    continue
+                t = d["segs"].get("__TEXT", {}).get("filesize", 0)
+                le = d["segs"].get("__LINKEDIT", {}).get("filesize", 0)
+                cs = d["codesig"]
+                blob = "none"
+                if cs:
+                    fh.seek(cs["dataoff"])
+                    raw = fh.read(4)
+                    if len(raw) == 4:
+                        m = struct.unpack(">I", raw)[0]
+                        blob = (f"{m:#010x} EMBEDDED" if m == CSMAGIC_EMBEDDED_SIGNATURE
+                                else f"{m:#010x}")
+                sig = (f"off={cs['dataoff']:,} len={cs['datasize']:,}" if cs
+                       else "ABSENT")
+                print(f"{p.name:28} {arch:8} {t:>12,} {le:>12,} {sig:>18} {blob:>12}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,90 @@
+"""Phase 1: make a true ZERO-COST routing mode that cannot reach a paid provider.
+
+Today `route="auto"` walks policy.order, which after lmstudio goes to nvidia and
+xpl -- both remote and billable. Any local failure silently spends money, which
+is the opposite of "zero-cost local inference".
+
+This adds an opt-in `local` route:
+    * computes the chain from config as providers flagged "local": true
+    * never includes a provider lacking that flag
+    * keeps a hard assertion so a future config edit cannot smuggle a paid
+      provider into the local chain
+
+Also flags llamacpp-local and lmstudio as local, and records the verified
+launch line for :8083.
+"""
+import json
+import shutil
+import sys
+from pathlib import Path
+
+CFG = Path("C:/ABRASAX/CONFIG/llm/providers.json")
+BAK = CFG.with_suffix(".json.bak-zero-cost")
+
+
+def main() -> int:
+    raw = CFG.read_text(encoding="utf-8")
+    data = json.loads(raw)
+
+    prov = data["providers"]
+
+    # 1. mark the genuinely local, zero-cost providers
+    prov["lmstudio"]["local"] = True
+    prov["llamacpp-local"]["local"] = True
+    neo = prov.get("neo")
+    if neo is not None:
+        neo["local"] = True
+
+    # 2. record the verified :8083 serving recipe
+    prov["llamacpp-local"]["models"]["default"] = (
+        r"C:\Users\lucar\.lmstudio\models\lmstudio-community\LFM2.5-1.2B-Instruct-GGUF\LFM2.5-1.2B-Instruct-Q6_K.gguf"
+    )
+    prov["llamacpp-local"]["models"]["coder"] = (
+        r""  # DEAD PATH (sirch): unity-csharp-coder GGUF not present on this host
+    )
+    prov["llamacpp-local"]["launch"] = (
+        r"C:\ABRASAX\BUILD\llamacpp\build\bin\llama-server.exe --model <gguf> "
+        "--port 8083 --host 127.0.0.1 -ngl 99 -c 4096"
+    )
+    prov["llamacpp-local"]["measured"] = {
+        "note": "verified 2026-10-25: zero-cost, GPU-resident, no API key",
+        "lfm2.5-1.2b": {"exact_follow": True, "arith": True, "json": True,
+                        "tok_s": 19.7, "load_s": 3.9, "vram_mib": 5617},
+        "qwen2.5-coder-7b": {"exact_follow": True, "arith": True, "json": True,
+                             "tok_s": 9.0, "vram_mib": 5581},
+        "nemotron-3-nano-4b": {"usable": False,
+                               "reason": "returned empty content at temperature 0 on all 3 probes"},
+    }
+
+    # 3. declare the zero-cost chain explicitly (order is deterministic)
+    data["policy"]["zero_cost_order"] = ["llamacpp-local", "lmstudio"]
+    data["policy"]["notes"] = (
+        data["policy"].get("notes", "")
+        + " | zero_cost_order = providers flagged local:true, tried before any remote "
+          "provider. route='local' can never reach nvidia/xpl."
+    )
+    data["updated"] = "2026-10-25"
+
+    # guard: nothing paid may be flagged local
+    for name, p in prov.items():
+        if p.get("local") and name in ("nvidia", "xpl"):
+            print(f"FAIL: {name} must never be marked local")
+            return 1
+
+    if not BAK.exists():
+        shutil.copy2(CFG, BAK)
+        print(f"backup: {BAK}")
+
+    CFG.write_text(json.dumps(data, indent=1, ensure_ascii=False), encoding="utf-8")
+
+    back = json.loads(CFG.read_text(encoding="utf-8"))
+    local_names = sorted(n for n, p in back["providers"].items() if p.get("local"))
+    print("local providers :", local_names)
+    print("zero_cost_order :", back["policy"]["zero_cost_order"])
+    assert not ({"nvidia", "xpl"} & set(back["policy"]["zero_cost_order"]))
+    print("patched: zero-cost chain configured")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

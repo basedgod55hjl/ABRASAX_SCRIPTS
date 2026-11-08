@@ -1,0 +1,97 @@
+#requires -Version 5.1
+<#
+  ABRASAX - S25 Offload
+  Pulls heavy media off the Galaxy S25 (R5CY308WZVK) to a harddrive target.
+  Resumable: adb pull skips nothing, so we compare sizes first and skip matches.
+  Writes a JSONL ledger + a hash manifest for every file pulled.
+  NEVER deletes on the phone unless -DeleteOnPhone is passed.
+#>
+param(
+  [string]$Serial   = 'R5CY308WZVK',
+  [string]$Dest     = 'J:\ABRASAX_OFFLOAD\S25_R5CY308WZVK',
+  [string[]]$Paths  = @('/sdcard/DCIM/Camera','/sdcard/DCIM/Screenshots','/sdcard/DCIM/Screen recordings','/sdcard/iPhoneData/Movies','/sdcard/iPhoneData/Pictures','/sdcard/Movies','/sdcard/Download','/sdcard/photos','/sdcard/Pictures'),
+  [switch]$DeleteOnPhone,
+  [switch]$DryRun
+)
+
+$ErrorActionPreference = 'Continue'
+$adb = 'C:\Users\sirch\Android\platform-tools\adb.exe'
+if (-not (Test-Path $adb)) { $adb = 'adb' }
+
+$stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
+New-Item -ItemType Directory -Force -Path $Dest | Out-Null
+$ledger = Join-Path $Dest "_ledger_$stamp.jsonl"
+$manifest = Join-Path $Dest "_manifest_$stamp.tsv"
+
+function Log($obj) {
+  $obj | Add-Member -NotePropertyName ts -NotePropertyValue (Get-Date).ToUniversalTime().ToString('o') -Force
+  ($obj | ConvertTo-Json -Compress) | Add-Content -LiteralPath $ledger -Encoding utf8
+}
+
+function RemoteSize($remote) {
+  $r = & $adb -s $Serial shell "stat -c %s '$remote' 2>/dev/null"
+  if ($r -match '^\d+$') { [int64]$r } else { -1 }
+}
+
+$totalPulled = 0L; $totalSkipped = 0L; $fileCount = 0
+foreach ($p in $Paths) {
+  $rel  = $p -replace '^/sdcard/',''
+  $out  = Join-Path $Dest $rel
+  New-Item -ItemType Directory -Force -Path $out | Out-Null
+  Write-Host "[offload] $p -> $out"
+  Log @{ ev='start'; src=$p; dst=$out }
+
+  $list = & $adb -s $Serial shell "find '$p' -type f -size +0 2>/dev/null"
+  if (-not $list) { Log @{ ev='empty'; src=$p }; continue }
+
+  $i = 0; $n = ($list | Measure-Object).Count
+  foreach ($remote in $list) {
+    $i++
+    $remote = $remote.Trim()
+    if (-not $remote) { continue }
+    $relFile = $remote -replace '^/sdcard/',''
+    $local = Join-Path $Dest ($relFile -replace '/','\')
+    $ldir  = Split-Path $local -Parent
+    if (-not (Test-Path $ldir)) { New-Item -ItemType Directory -Force -Path $ldir | Out-Null }
+
+    $rsize = RemoteSize $remote
+    $lsize = if (Test-Path -LiteralPath $local) { (Get-Item -LiteralPath $local).Length } else { -1 }
+
+    if ($rsize -ge 0 -and $lsize -eq $rsize) {
+      $totalSkipped += $l2 = $rsize
+      Log @{ ev='skip'; src=$remote; bytes=$rsize; reason='size-match' }
+      continue
+    }
+    if ($DryRun) { Log @{ ev='dry'; src=$remote; bytes=$rsize }; continue }
+
+    Write-Progress -Activity "Pulling $rel" -Status "$i/$n  $([math]::Round($totalPulled/1GB,2)) GB" -PercentComplete (($i/$n)*100)
+    & $adb -s $Serial pull -a "$remote" "$local" 2>&1 | Out-Null
+    if (Test-Path -LiteralPath $local) {
+      $got = (Get-Item -LiteralPath $local).Length
+      if ($got -eq $l2 -or $rsize -lt 0 -or $got -eq $rsize) {
+        $totalPulled += $got; $fileCount++
+        $h = (Get-FileHash -LiteralPath $local -Algorithm SHA256).Hash
+        "$h`t$got`t$relFile" | Add-Content -LiteralPath $manifest -Encoding utf8
+        Log @{ ev='ok'; src=$remote; dst=$local; bytes=$got; sha256=$h }
+        if ($DeleteOnPhone) { & $adb -s $Serial shell "rm -f '$remote'" 2>&1 | Out-Null; Log @{ ev='del'; src=$remote } }
+      } else {
+        Log @{ ev='partial'; src=$remote; want=$rsize; got=$got }
+      }
+    } else {
+      Log @{ ev='fail'; src=$remote }
+    }
+  }
+  Write-Progress -Activity "Pulling $rel" -Completed
+}
+
+$summary = [pscustomobject]@{
+  ev='done'; source_serial=$Serial; dest=$Dest
+  files_pulled=$fileCount
+  bytes_pulled=$totalPulled
+  bytes_pulled_GB=[math]::Round($totalPulled/1GB,2)
+  bytes_skipped_GB=[math]::Round($totalSkipped/1GB,2)
+  deleted_on_phone=[bool]$DeleteOnPhone
+  ledger=$ledger; manifest=$manifest
+}
+Log $summary
+$summary | ConvertTo-Json | Write-Host

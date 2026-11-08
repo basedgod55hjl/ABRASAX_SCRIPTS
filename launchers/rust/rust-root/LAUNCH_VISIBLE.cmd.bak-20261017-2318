@@ -1,0 +1,16 @@
+@echo off
+REM ABRASAX VISIBLE WINDOWS LAUNCHER
+REM This opens visible monitoring windows
+cd /d "C:\Users\sirch\Desktop\ABRASAX AGI"
+echo Opening ABRASAX monitor windows...
+
+REM Window 1 - Gateway Monitor
+start "ABRASAX Gateway :9000" cmd /k "echo === GATEWAY HEALTH MONITOR === && echo. && :loop && curl -s http://localhost:9000/health && echo. && timeout /t 3 >nul && cls && goto loop"
+
+REM Window 2 - GPU Monitor
+start "ABRASAX GPU" cmd /k "echo === GPU MONITOR === && echo. && :loop && nvidia-smi --query-gpu=name,temperature.gpu,utilization.gpu,memory.used,memory.total --format=csv,noheader && timeout /t 3 >nul && cls && goto loop"
+
+REM Window 3 - Process Monitor
+start "ABRASAX Processes" cmd /k "echo === ABRASAX PROCESSES === && echo. && :loop && tasklist /fi "IMAGENAME eq python.exe" /nh 2>nul && tasklist /fi "IMAGENAME eq abrasax.exe" /nh 2>nul && timeout /t 5 >nul && cls && goto loop"
+
+echo All windows launched!

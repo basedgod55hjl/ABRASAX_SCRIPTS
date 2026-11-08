@@ -1,0 +1,2 @@
+@echo off
+powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\sirch\Desktop\ABRASAX_GOD_OS\tools\autoloop.ps1"

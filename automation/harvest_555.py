@@ -1,0 +1,94 @@
+"""Harvest the 555_SEED artifacts from Telegram Desktop into SEEDS\\555-seed,
+then decode any QR codes found (OpenCV QRCodeDetector + WeChat detector)."""
+
+from __future__ import annotations
+
+import json
+import shutil
+from datetime import datetime, timezone
+from pathlib import Path
+
+import cv2
+import numpy as np
+
+TG = Path(r"C:\Users\lucar\Downloads\Telegram Desktop")
+DEST = Path(r"C:\ABRASAX\SEEDS\555-seed")
+DEST.mkdir(parents=True, exist_ok=True)
+
+PATTERNS = ["seed.PNG", "555555555.png", "ABRACADABRA BITCH.txt", "unnamed*.png", "photo_1*_2026-10-04*"]
+
+
+def now():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def harvest() -> list[Path]:
+    copied = []
+    for pat in PATTERNS:
+        for src in TG.glob(pat):
+            if not src.is_file():
+                continue
+            dst = DEST / src.name
+            if not dst.exists() or dst.stat().st_size != src.stat().st_size:
+                shutil.copy2(src, dst)
+            copied.append(dst)
+    return copied
+
+
+def try_decode(img, mode_label):
+    det = cv2.QRCodeDetector()
+    try:
+        ok, decoded, points, _ = det.detectAndDecodeMulti(img)
+        if ok and decoded:
+            return [(mode_label, "multi", d) for d in decoded if d]
+    except cv2.error:
+        pass
+    try:
+        data, points, _ = det.detectAndDecode(img)
+        if data:
+            return [(mode_label, "single", data)]
+    except cv2.error:
+        pass
+    return []
+
+
+def scan(path: Path) -> list[dict]:
+    img = cv2.imread(str(path), cv2.IMREAD_COLOR)
+    if img is None:
+        return []
+    found = []
+    for label, candidate in [("raw", img), ("gray", cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))]:
+        for scale in (1.0, 0.5):
+            ci = candidate if scale == 1.0 else cv2.resize(candidate, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+            for hit in try_decode(ci, label):
+                found.append({"where": label, "scale": scale, "mode": hit[1], "data": hit[2][:4000]})
+    try:
+        wech = cv2.wechat_qrcode_WeChatQRCode()
+        for label, candidate in [("raw-wx", img), ("gray-wx", cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))]:
+            d, _ = wech.detectAndDecode(candidate)
+            for dd in d:
+                if dd:
+                    found.append({"where": label, "scale": 1.0, "mode": "wechat", "data": dd[:4000]})
+    except Exception:
+        pass
+    return found
+
+
+def main():
+    copied = harvest()
+    results = {"ts": now(), "dest": str(DEST), "copied": [p.name for p in copied], "qr": {}}
+    for p in copied:
+        if p.suffix.lower() not in (".png", ".jpg", ".jpeg", ".bmp"):
+            continue
+        hits = scan(p)
+        if hits:
+            results["qr"][p.name] = hits
+    out = DEST / "qr-decode-results.json"
+    out.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"copied={len(copied)} images_with_qr={len(results['qr'])}")
+    for name, hits in results["qr"].items():
+        print(f"  {name}: {len(hits)} hit(s) -> {hits[0]['data'][:80]!r}")
+
+
+if __name__ == "__main__":
+    main()

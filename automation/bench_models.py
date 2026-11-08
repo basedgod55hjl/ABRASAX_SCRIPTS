@@ -1,0 +1,486 @@
+#!/usr/bin/env python3
+"""bench_models.py — measure local GGUF latency, throughput and VRAM cost.
+
+Read-only probe of the two models resident in LM Studio on the 6 GB GTX 1660 Ti.
+It never loads, unloads, starts or kills anything: it only issues chat
+completions to the ABRASAX gateway (:9001) and reads `nvidia-smi`.
+
+Stdlib + urllib only (no requests, no torch) so it runs under any Python 3.9+.
+
+Phases
+  baseline     one nvidia-smi snapshot
+  latency      3 x max_tokens=8 per model, temperature 0   (the fixed prompt)
+  throughput   1 x max_tokens=64 per model                 (real tok/s, not floor)
+  coldwarm     60 s idle -> call -> immediate 2nd call     (JIT / eviction cost)
+  concurrency  one call per model fired at the same instant (6 GB contention)
+
+Every phase is bracketed by VRAM samples; the peak seen during the phase is
+reported next to headroom against the 6144 MiB card.
+
+Exit codes: 0 = all calls completed, 1 = at least one call failed (details in
+the JSON `errors` list).
+
+Usage
+  python SCRIPTS/automation/bench_models.py
+  python SCRIPTS/automation/bench_models.py --quick          # 1 run, skip coldwarm
+  python SCRIPTS/automation/bench_models.py --phase latency --runs 3
+  python SCRIPTS/automation/bench_models.py --out bench.json
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import statistics
+import subprocess
+import sys
+import threading
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+ENV_FILE = ROOT / ".env"
+DEFAULT_PROMPT = "Reply with the single word: OK"
+# The 8-token latency prompt deliberately stops after 1-2 tokens, so it measures
+# first-token + overhead, not decode speed. The throughput probe needs a prompt
+# that keeps generating for the whole budget.
+THROUGHPUT_PROMPT = "Count from 1 to 60, one number per line, no other text."
+VRAM_TOTAL_MIB = 6144
+BONSAI = "prism-ml/bonsai-27b"
+LFM = "gemma-4-e2b-uncensored-hauhaucs-aggressive"
+
+
+# --------------------------------------------------------------------------- #
+# config
+# --------------------------------------------------------------------------- #
+def read_env(path: Path = ENV_FILE) -> dict[str, str]:
+    """Parse KEY=VALUE lines; ignores comments and blank lines. Never prints values."""
+    out: dict[str, str] = {}
+    if not path.exists():
+        return out
+    for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        out[key.strip()] = val.strip().strip('"').strip("'")
+    return out
+
+
+def gateway_url(env: dict[str, str]) -> str:
+    explicit = os.environ.get("ABRASAX_GATEWAY_URL") or env.get("ABRASAX_GATEWAY_URL")
+    if explicit:
+        return explicit.rstrip("/")
+    port = os.environ.get("ABRASAX_GATEWAY_PORT") or "9001"
+    return f"http://127.0.0.1:{port}"
+
+
+def auth_headers(env: dict[str, str], env_name: str = "ABRASAX_GATEWAY_TOKEN") -> dict[str, str]:
+    """Bearer token from the process env or .env. The gateway is often open-loopback;
+    LM Studio :1234 requires LM_STUDIO_API_KEY, so --auth-env exists for direct probes."""
+    headers = {"Content-Type": "application/json"}
+    token = os.environ.get(env_name) or env.get(env_name)
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+# --------------------------------------------------------------------------- #
+# GPU sampling
+# --------------------------------------------------------------------------- #
+def vram() -> dict[str, float | None]:
+    """memory.used / memory.free / util / temp straight from nvidia-smi."""
+    cmd = [
+        "nvidia-smi",
+        "--query-gpu=memory.total,memory.used,memory.free,utilization.gpu,temperature.gpu",
+        "--format=csv,noheader,nounits",
+    ]
+    try:
+        raw = subprocess.run(cmd, capture_output=True, text=True, timeout=15).stdout.strip()
+    except Exception as exc:  # noqa: BLE001
+        return {"error": repr(exc)}
+    if not raw:
+        return {"error": "nvidia-smi returned nothing"}
+    parts = [p.strip() for p in raw.splitlines()[0].split(",")]
+    try:
+        total, used, free, util, temp = (float(p) for p in parts[:5])
+    except ValueError:
+        return {"error": f"unparsable nvidia-smi line: {raw!r}"}
+    return {
+        "total_mib": total,
+        "used_mib": used,
+        "free_mib": free,
+        "util_pct": util,
+        "temp_c": temp,
+        "headroom_mib": round(total - used, 1),
+    }
+
+
+class VramWatch:
+    """Background sampler so a phase reports the peak, not just before/after."""
+
+    def __init__(self, interval: float = 0.5) -> None:
+        self.interval = interval
+        self.samples: list[dict] = []
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            snap = vram()
+            if "used_mib" in snap:
+                self.samples.append(snap)
+            self._stop.wait(self.interval)
+
+    def start(self) -> "VramWatch":
+        self._thread.start()
+        return self
+
+    def stop(self) -> dict:
+        self._stop.set()
+        self._thread.join(timeout=5)
+        if not self.samples:
+            return {}
+        used = [s["used_mib"] for s in self.samples]
+        util = [s["util_pct"] for s in self.samples]
+        return {
+            "samples": len(self.samples),
+            "used_min_mib": min(used),
+            "used_max_mib": max(used),
+            "used_mean_mib": round(statistics.fmean(used), 1),
+            "util_mean_pct": round(statistics.fmean(util), 1),
+            "util_max_pct": max(util),
+            "headroom_min_mib": round(VRAM_TOTAL_MIB - max(used), 1),
+        }
+
+
+# --------------------------------------------------------------------------- #
+# one completion
+# --------------------------------------------------------------------------- #
+def chat(base: str, model: str, headers: dict[str, str], prompt: str = DEFAULT_PROMPT,
+         max_tokens: int = 8, temperature: float = 0.0, timeout: float = 900.0,
+         pin: bool = True) -> dict:
+    """POST /v1/chat/completions and time it. Never raises: failures land in `error`."""
+    body = {
+        # "lmstudio:" pins the provider so a slow local call can never silently
+        # fall back to a paid cloud provider mid-benchmark.
+        "model": f"lmstudio:{model}" if pin else model,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "stream": False,
+    }
+    raw = json.dumps(body).encode()
+    req = urllib.request.Request(
+        f"{base}/v1/chat/completions", data=raw, headers=headers, method="POST"
+    )
+    started = time.perf_counter()
+    result: dict = {"model": model, "max_tokens": max_tokens}
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            payload = resp.read()
+            status = resp.status
+    except urllib.error.HTTPError as exc:
+        result.update(ok=False, wall_ms=round((time.perf_counter() - started) * 1000, 1),
+                      http_status=exc.code, error=f"HTTP {exc.code}: {exc.read()[:300]!r}")
+        return result
+    except Exception as exc:  # noqa: BLE001 - timeout, connection reset, ...
+        result.update(ok=False, wall_ms=round((time.perf_counter() - started) * 1000, 1),
+                      error=repr(exc))
+        return result
+
+    wall_ms = round((time.perf_counter() - started) * 1000, 1)
+    try:
+        data = json.loads(payload)
+    except Exception as exc:  # noqa: BLE001
+        result.update(ok=False, wall_ms=wall_ms, http_status=status,
+                      error=f"non-JSON body ({exc}): {payload[:200]!r}")
+        return result
+
+    choices = data.get("choices") or [{}]
+    msg = (choices[0] or {}).get("message") or {}
+    usage = data.get("usage") or {}
+    completion = int(usage.get("completion_tokens") or 0)
+    details = usage.get("completion_tokens_details") or {}
+    reasoning = int(details.get("reasoning_tokens") or 0)
+    result.update(
+        ok=True,
+        wall_ms=wall_ms,
+        http_status=status,
+        content=(msg.get("content") or ""),
+        reasoning_content=(msg.get("reasoning_content") or ""),
+        finish_reason=(choices[0] or {}).get("finish_reason"),
+        prompt_tokens=int(usage.get("prompt_tokens") or 0),
+        completion_tokens=completion,
+        reasoning_tokens=reasoning,
+        total_tokens=int(usage.get("total_tokens") or 0),
+        tok_per_s=round(completion / (wall_ms / 1000.0), 3) if wall_ms > 0 and completion else 0.0,
+        answered=bool((msg.get("content") or "").strip()) and reasoning == 0,
+    )
+    return result
+
+
+# --------------------------------------------------------------------------- #
+# aggregation
+# --------------------------------------------------------------------------- #
+def summarise(runs: list[dict]) -> dict:
+    ok = [r for r in runs if r.get("ok")]
+    if not ok:
+        return {"runs": len(runs), "ok": 0, "errors": [r.get("error") for r in runs]}
+    walls = [r["wall_ms"] for r in ok]
+    toks = [r["completion_tokens"] for r in ok]
+    tps = [r["tok_per_s"] for r in ok if r.get("tok_per_s")]
+    return {
+        "runs": len(runs),
+        "ok": len(ok),
+        "wall_ms_median": round(statistics.median(walls), 1),
+        "wall_ms_min": min(walls),
+        "wall_ms_max": max(walls),
+        "completion_tokens_median": statistics.median(toks),
+        "reasoning_tokens_median": statistics.median([r["reasoning_tokens"] for r in ok]),
+        "prompt_tokens": sorted({r["prompt_tokens"] for r in ok}),
+        "tok_per_s_median": round(statistics.median(tps), 3) if tps else None,
+        "answered_all": all(r.get("answered") for r in ok),
+        "errors": [r.get("error") for r in runs if not r.get("ok")] or None,
+    }
+
+
+def phase(name: str, fn) -> dict:
+    """Run a phase inside a VRAM watch and keep failures from aborting the suite."""
+    watch = VramWatch().start()
+    before = vram()
+    started = time.perf_counter()
+    try:
+        payload = fn()
+        error = None
+    except Exception as exc:  # noqa: BLE001
+        payload, error = None, repr(exc)
+    elapsed = round(time.perf_counter() - started, 1)
+    peak = watch.stop()
+    after = vram()
+    return {
+        "phase": name,
+        "elapsed_s": elapsed,
+        "vram_before": before,
+        "vram_after": after,
+        "vram_during": peak,
+        "error": error,
+        **({"result": payload} if payload is not None else {}),
+    }
+
+
+# --------------------------------------------------------------------------- #
+# phases
+# --------------------------------------------------------------------------- #
+def do_latency(base: str, headers: dict[str, str], models: list[str], runs: int,
+               max_tokens: int, gap: float, pin: bool = True) -> dict:
+    out = {}
+    for model in models:
+        seq = []
+        for i in range(runs):
+            r = chat(base, model, headers, max_tokens=max_tokens, pin=pin)
+            seq.append(r)
+            print(f"  [{model}] run {i + 1}/{runs}: {r.get('wall_ms')} ms, "
+                  f"{r.get('completion_tokens', 0)} tok, ok={r.get('ok')}", flush=True)
+            if i + 1 < runs:
+                time.sleep(gap)
+        out[model] = {"summary": summarise(seq), "runs": seq}
+    return out
+
+
+def do_throughput(base: str, headers: dict[str, str], models: list[str], max_tokens: int,
+                  prompt: str = THROUGHPUT_PROMPT, pin: bool = True) -> dict:
+    out = {}
+    for model in models:
+        r = chat(base, model, headers, prompt=prompt, max_tokens=max_tokens, pin=pin)
+        print(f"  [{model}] {max_tokens}-token run: {r.get('wall_ms')} ms, "
+              f"{r.get('completion_tokens', 0)} tok, {r.get('tok_per_s')} tok/s, "
+              f"reasoning={r.get('reasoning_tokens')}", flush=True)
+        out[model] = r
+    return out
+
+
+def do_coldwarm(base: str, headers: dict[str, str], models: list[str],
+                idle_s: float, max_tokens: int, pin: bool = True) -> dict:
+    out = {}
+    for model in models:
+        print(f"  [{model}] idling {idle_s:.0f}s ...", flush=True)
+        time.sleep(idle_s)
+        cold = chat(base, model, headers, max_tokens=max_tokens, pin=pin)
+        warm = chat(base, model, headers, max_tokens=max_tokens, pin=pin)
+        delta = None
+        if cold.get("ok") and warm.get("ok"):
+            delta = {
+                "wall_ms_delta": round(warm["wall_ms"] - cold["wall_ms"], 1),
+                "ratio": round(cold["wall_ms"] / warm["wall_ms"], 2) if warm["wall_ms"] else None,
+            }
+        print(f"  [{model}] cold={cold.get('wall_ms')} ms warm={warm.get('wall_ms')} ms "
+              f"delta={delta}", flush=True)
+        out[model] = {"cold": cold, "warm": warm, "delta": delta}
+    return out
+
+
+def do_concurrency(base: str, headers: dict[str, str], a: str, b: str,
+                   max_tokens: int, pin: bool = True,
+                   prompt: str = THROUGHPUT_PROMPT) -> dict:
+    """Solo baselines first, then both models generating at the same instant.
+
+    The solo runs are what make the parallel numbers interpretable: a cached
+    prompt or a cold page cache otherwise masks the contention entirely.
+    """
+    solo: dict[str, dict] = {}
+    for model in (a, b):
+        solo[model] = chat(base, model, headers, prompt=prompt,
+                           max_tokens=max_tokens, pin=pin)
+        print(f"  solo   {model}: {solo[model].get('wall_ms')} ms "
+              f"({solo[model].get('tok_per_s')} tok/s)", flush=True)
+    time.sleep(3)
+
+    results: dict[str, dict] = {}
+    start = threading.Barrier(2)
+
+    def worker(model: str) -> None:
+        start.wait(timeout=30)
+        results[model] = chat(base, model, headers, prompt=prompt,
+                              max_tokens=max_tokens, pin=pin)
+
+    threads = [threading.Thread(target=worker, args=(m,), daemon=True) for m in (a, b)]
+    wall_start = time.perf_counter()
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=1200)
+    total = round((time.perf_counter() - wall_start) * 1000, 1)
+    both = all(results.get(m, {}).get("ok") for m in (a, b))
+    print(f"  parallel total={total} ms both_ok={both}: "
+          + ", ".join(f"{m}={results.get(m, {}).get('wall_ms')} ms" for m in (a, b)), flush=True)
+
+    slowdown = {}
+    for model in (a, b):
+        s, p = solo[model].get("wall_ms"), results.get(model, {}).get("wall_ms")
+        if s and p:
+            slowdown[model] = round(p / s, 2)
+    return {"total_wall_ms": total, "both_ok": both,
+            "solo": solo, "parallel": results, "slowdown_x": slowdown}
+
+
+# --------------------------------------------------------------------------- #
+# main
+# --------------------------------------------------------------------------- #
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description="Benchmark resident GGUF models on the 1660 Ti.")
+    ap.add_argument("--models", default=f"{LFM},{BONSAI}",
+                    help="comma-separated LM Studio model ids")
+    ap.add_argument("--runs", type=int, default=3, help="latency runs per model")
+    ap.add_argument("--max-tokens", type=int, default=8, help="latency max_tokens")
+    ap.add_argument("--throughput-tokens", type=int, default=64,
+                    help="max_tokens for the throughput probe")
+    ap.add_argument("--cold-idle", type=float, default=60.0, help="idle seconds before cold call")
+    ap.add_argument("--concurrency-tokens", type=int, default=48,
+                    help="max_tokens for the parallel-contention phase")
+    ap.add_argument("--gap", type=float, default=2.0, help="seconds between latency runs")
+    ap.add_argument("--timeout", type=float, default=900.0, help="per-call timeout")
+    ap.add_argument("--phase", default="all",
+                    choices=["all", "baseline", "latency", "throughput", "coldwarm", "concurrency"])
+    ap.add_argument("--quick", action="store_true", help="1 run, skip coldwarm (fast smoke test)")
+    ap.add_argument("--out", default="", help="write the JSON report here (default stdout only)")
+    ap.add_argument("--base", default="", help="override endpoint base (e.g. http://127.0.0.1:1234)")
+    ap.add_argument("--auth-env", default="ABRASAX_GATEWAY_TOKEN",
+                    help="env/.env name holding the bearer token (LM_STUDIO_API_KEY for :1234)")
+    ap.add_argument("--no-pin", action="store_true",
+                    help="send the bare model id (direct LM Studio) instead of lmstudio:<id>")
+    args = ap.parse_args(argv)
+
+    if args.quick:
+        args.runs = 1
+        if args.phase == "all":
+            args.phase = "latency"
+
+    env = read_env()
+    base = (args.base.rstrip("/") if args.base else gateway_url(env))
+    headers = auth_headers(env, args.auth_env)
+    models = [m.strip() for m in args.models.split(",") if m.strip()]
+
+    print(f"[bench] gateway {base}  models={models}  runs={args.runs} "
+          f"max_tokens={args.max_tokens} phase={args.phase}", flush=True)
+
+    report: dict = {
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "gateway": base,
+        "models": models,
+        "config": {"runs": args.runs, "max_tokens": args.max_tokens,
+                   "throughput_tokens": args.throughput_tokens,
+                   "cold_idle_s": args.cold_idle, "gap_s": args.gap},
+        "phases": [],
+    }
+
+    pin = not args.no_pin
+    phases: list[tuple[str, object]] = []
+    if args.phase in ("all", "baseline"):
+        phases.append(("baseline", lambda: {"vram": vram()}))
+    if args.phase in ("all", "latency"):
+        phases.append(("latency", lambda: do_latency(
+            base, headers, models, args.runs, args.max_tokens, args.gap, pin=pin)))
+    if args.phase in ("all", "throughput"):
+        phases.append(("throughput", lambda: do_throughput(
+            base, headers, models, args.throughput_tokens, pin=pin)))
+    if args.phase in ("all", "coldwarm") and not args.quick:
+        phases.append(("coldwarm", lambda: do_coldwarm(
+            base, headers, models, args.cold_idle, args.max_tokens, pin=pin)))
+    if args.phase in ("all", "concurrency") and len(models) >= 2:
+        phases.append(("concurrency", lambda: do_concurrency(
+            base, headers, models[0], models[1], args.concurrency_tokens, pin=pin)))
+
+    for name, fn in phases:
+        print(f"[bench] phase {name}", flush=True)
+        report["phases"].append(phase(name, fn))
+
+    # ---- compact stdout summary ----
+    print("\n=== summary ===")
+    for ph in report["phases"]:
+        res = ph.get("result") or {}
+        if ph["phase"] == "latency":
+            for model, entry in res.items():
+                s = entry["summary"]
+                print(f"{ph['phase']:<12} {model:<26} median={s.get('wall_ms_median')} ms "
+                      f"tok/s={s.get('tok_per_s_median')} answered={s.get('answered_all')}")
+        elif ph["phase"] == "throughput":
+            for model, r in res.items():
+                print(f"{ph['phase']:<12} {model:<26} {r.get('wall_ms')} ms "
+                      f"{r.get('completion_tokens')} tok {r.get('tok_per_s')} tok/s")
+        elif ph["phase"] == "coldwarm":
+            for model, e in res.items():
+                print(f"{ph['phase']:<12} {model:<26} cold={e['cold'].get('wall_ms')} ms "
+                      f"warm={e['warm'].get('wall_ms')} ms delta={e.get('delta')}")
+        elif ph["phase"] == "concurrency":
+            print(f"{ph['phase']:<12} both_ok={res.get('both_ok')} total={res.get('total_wall_ms')} ms "
+                  f"slowdown={res.get('slowdown_x')}")
+        during = ph.get("vram_during") or {}
+        if during:
+            print(f"{'  vram':<12} used_max={during['used_max_mib']} MiB "
+                  f"headroom_min={during['headroom_min_mib']} MiB "
+                  f"util_mean={during['util_mean_pct']}%")
+
+    if args.out:
+        Path(args.out).write_text(json.dumps(report, indent=2), encoding="utf-8")
+        print(f"\n[bench] wrote {args.out}")
+
+    failures = 0
+    for ph in report["phases"]:
+        res = ph.get("result") or {}
+        if ph["phase"] == "latency":
+            for entry in res.values():
+                failures += len(entry.get("runs", [])) - entry["summary"].get("ok", 0)
+        elif ph["phase"] == "coldwarm":
+            for e in res.values():
+                failures += sum(1 for k in ("cold", "warm") if not e[k].get("ok"))
+        elif ph["phase"] == "concurrency":
+            failures += sum(1 for r in res.get("parallel", {}).values() if not r.get("ok"))
+    print(f"[bench] failed calls: {failures}")
+    return 0 if failures == 0 else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

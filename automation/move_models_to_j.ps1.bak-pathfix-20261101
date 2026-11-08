@@ -1,0 +1,439 @@
+<#
+.SYNOPSIS
+    Relocate the LM Studio model store from C: to J: and leave a junction behind.
+
+.DESCRIPTION
+    C: is at ~98% used. The LM Studio model store is the single largest movable
+    object on the volume. This script moves it to J: (282 GB free) and creates a
+    directory junction at the original path so LM Studio keeps working unchanged.
+
+    PLAN MODE IS THE DEFAULT. Without -Execute the script only runs preflight
+    checks, measures the store, prints the exact command and writes NOTHING.
+
+    Steps performed by -Execute:
+      1. Refuse if any "LM Studio" process is running (unless -Force). An open
+         model file cannot be moved - robocopy would fail mid-move.
+      2. Refuse if the source is already a junction/reparse point, if J: lacks
+         free space, or if the target exists and is not empty (unless -Force).
+      3. Write a pre-move manifest (file counts + bytes per author folder).
+      4. robocopy /MOVE source -> J:\AI\lmstudio-models  (robocopy deletes each
+         source file only after its copy is verified).
+      5. Remove the now-empty source directory (only if it is empty).
+      6. mklink /J  source -> target.
+      7. Verify the junction resolves, compare file counts, list models.
+      8. Append the result to the manifest.
+    If any step after the move fails, the script copies the store back to C: and
+    restores the original layout automatically (disable with -NoAutoRollback).
+
+.PARAMETER Execute
+    Perform the move. Without this the script is read-only (plan mode).
+
+.PARAMETER Force
+    Proceed even though LM Studio is running, or even though the target already
+    has content. You almost never want this: quit LM Studio first instead.
+
+.PARAMETER TimeoutSeconds
+    Per-author-folder size measurement timeout (default 20 s). A folder that
+    exceeds it is reported as "size not measurable" instead of hanging the run.
+
+.PARAMETER NoAutoRollback
+    Do not copy the store back to C: automatically if the junction step fails.
+
+.EXAMPLE
+    # 1. Read-only plan. Safe to run at any time, even while LM Studio is serving.
+    .\move_models_to_j.ps1
+
+.EXAMPLE
+    # 2. The real move. Quit LM Studio FIRST (tray icon -> Quit), then:
+    powershell -NoProfile -ExecutionPolicy Bypass -File C:\ABRASAX\SCRIPTS\automation\move_models_to_j.ps1 -Execute
+
+.EXAMPLE
+    # 3. Undo after a successful move:
+    powershell -NoProfile -ExecutionPolicy Bypass -File C:\ABRASAX\SCRIPTS\automation\move_models_to_j.ps1 -Rollback
+
+.NOTES
+    Exit codes: 0 ok/plan, 2 preflight refused, 3 executed with failure (rollback
+    attempted), 4 verification failed.
+#>
+
+[CmdletBinding()]
+param(
+    [switch]$Execute,
+    [switch]$Force,
+    [switch]$Rollback,
+    [switch]$NoAutoRollback,
+    [int]$TimeoutSeconds = 20,
+    [string]$Source = 'C:\Users\sirch\.lmstudio\models',
+    [string]$Target = 'J:\AI\lmstudio-models',
+    [string]$ManifestDir = 'J:\ABRASAX-ARCHIVE\manifests'
+)
+
+$ErrorActionPreference = 'Stop'
+$script:Stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+$script:LogPath = $null
+
+function Say  { param([string]$m) Write-Host $m }
+function Ok   { param([string]$m) Write-Host "  [ok]   $m" -ForegroundColor Green }
+function Warn { param([string]$m) Write-Host "  [warn] $m" -ForegroundColor Yellow }
+function Bad  { param([string]$m) Write-Host "  [FAIL] $m" -ForegroundColor Red }
+function Head { param([string]$m) Write-Host ""; Write-Host "== $m" -ForegroundColor Cyan }
+
+function Human {
+    param([double]$Bytes)
+    if ($Bytes -lt 0) { return 'unknown' }
+    if ($Bytes -ge 1GB) { return ('{0:N2} GB' -f ($Bytes / 1GB)) }
+    if ($Bytes -ge 1MB) { return ('{0:N1} MB' -f ($Bytes / 1MB)) }
+    if ($Bytes -ge 1KB) { return ('{0:N1} KB' -f ($Bytes / 1KB)) }
+    return ('{0} B' -f [long]$Bytes)
+}
+
+function Get-FreeBytes {
+    param([string]$Path)
+    $root = [System.IO.Path]::GetPathRoot([System.IO.Path]::GetFullPath($Path))
+    $d = Get-PSDrive -Name $root.TrimEnd('\', ':') -ErrorAction SilentlyContinue
+    if (-not $d) { return -1 }
+    return [double]$d.Free
+}
+
+function Measure-FolderWithTimeout {
+    param([string]$Path, [int]$Timeout = 20)
+    $job = Start-Job -ScriptBlock {
+        param($p)
+        $m = Get-ChildItem -LiteralPath $p -Recurse -File -Force -ErrorAction SilentlyContinue |
+             Measure-Object -Property Length -Sum
+        [pscustomobject]@{ Bytes = [long]($m.Sum); Files = [int]($m.Count); TimedOut = $false }
+    } -ArgumentList $Path
+    $done = Wait-Job $job -Timeout $Timeout
+    if ($done) {
+        $r = Receive-Job $job -ErrorAction SilentlyContinue
+        Remove-Job $job -Force -ErrorAction SilentlyContinue
+        $r = @($r)[-1]
+        if ($null -eq $r) { return [pscustomobject]@{ Bytes = 0; Files = 0; TimedOut = $false } }
+        return $r
+    }
+    Stop-Job $job -ErrorAction SilentlyContinue
+    Remove-Job $job -Force -ErrorAction SilentlyContinue
+    return [pscustomobject]@{ Bytes = -1; Files = -1; TimedOut = $true }
+}
+
+function Invoke-Robocopy {
+    param([string]$From, [string]$To, [string]$LogFile, [switch]$Move)
+    $mode = if ($Move) { '/MOVE' } else { '/E' }
+    $roboArgs = @(
+        "$From", "$To", $mode, '/E', '/COPY:DAT', '/DCOPY:DAT',
+        '/XJ', '/R:2', '/W:3', '/NFL', '/NDL', '/NP', "/LOG+:$LogFile"
+    )
+    Say ("  robocopy {0} `"{1}`" `"{2}`"" -f $mode, $From, $To)
+    & robocopy.exe @roboArgs 2>&1 | Out-Null
+    return [int]$LASTEXITCODE
+}
+
+function Get-ModelStats {
+    param([string]$Path)
+    $gguf = @(Get-ChildItem -LiteralPath $Path -Recurse -File -Filter '*.gguf' -ErrorAction SilentlyContinue)
+    $all  = @(Get-ChildItem -LiteralPath $Path -Recurse -File -ErrorAction SilentlyContinue)
+    $bytes = 0.0
+    foreach ($f in $all) { $bytes += $f.Length }
+    return [pscustomobject]@{ Gguf = $gguf.Count; Files = $all.Count; Bytes = [long]$bytes }
+}
+
+function Write-Manifest {
+    param([hashtable]$Extra)
+    if (-not (Test-Path -LiteralPath $ManifestDir)) {
+        New-Item -ItemType Directory -Path $ManifestDir -Force | Out-Null
+    }
+    $path = Join-Path $ManifestDir ("models-move-{0}.json" -f $script:Stamp)
+    $m = [ordered]@{
+        ts            = (Get-Date).ToString('o')
+        host          = $env:COMPUTERNAME
+        mode          = if ($Execute) { 'execute' } else { 'plan' }
+        source        = $Source
+        target        = $Target
+        junction      = $Source
+        robocopy_log  = $script:LogPath
+        c_free_before = $script:C_Free_Before
+        j_free_before = $script:J_Free_Before
+        measured      = $script:Measure
+    }
+    foreach ($k in $Extra.Keys) { $m[$k] = $Extra[$k] }
+    ($m | ConvertTo-Json -Depth 6) | Set-Content -LiteralPath $path -Encoding UTF8
+    return $path
+}
+
+# ------------------------------------------------------------------ preflight
+Say "ABRASAX DISK-RECLAIM : LM Studio model relocation"
+Say ("source : {0}" -f $Source)
+Say ("target : {0}" -f $Target)
+Say ("mode   : {0}" -f $(if ($Rollback) { 'ROLLBACK' } elseif ($Execute) { 'EXECUTE' } else { 'PLAN (read-only, nothing is changed)' }))
+
+Head 'preflight'
+
+if ($Rollback) {
+    # ---- rollback path -------------------------------------------------------
+    if (-not (Test-Path -LiteralPath $Source)) { Bad "source path does not exist: $Source"; exit 2 }
+    $item = Get-Item -LiteralPath $Source -Force
+    if (-not $item.Attributes.ToString().Contains('ReparsePoint')) {
+        Bad "$Source is not a junction - nothing to roll back"; exit 2
+    }
+    $lmRb = @(Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue)
+    if ($lmRb.Count -gt 0 -and -not $Force) {
+        Bad ("{0} 'LM Studio' process(es) are running - quit LM Studio before rolling back" -f $lmRb.Count)
+        Say '  The junction cannot be removed while models are mapped through it.'
+        exit 2
+    }
+    $srcFree = Get-FreeBytes -Path (Split-Path -Parent $Source)
+    $stats = Get-ModelStats -Path $Target
+    Say ("  store on J: : {0} files, {1} gguf, {2}" -f $stats.Files, $stats.Gguf, (Human $stats.Bytes))
+    Say ("  C: free     : {0}" -f (Human $srcFree))
+    if (-not $Execute) {
+        Say ''
+        Say 'PLAN ONLY. Rollback would:'
+        Say "  1. remove the junction  cmd /c rmdir `"$Source`""
+        Say "  2. copy back            robocopy `"$Target`" `"$Source`" /MOVE /E /COPY:DAT /XJ"
+        Say "  re-run with -Rollback -Execute to perform it."
+        exit 0
+    }
+    if ($srcFree -gt 0 -and $stats.Bytes -gt 0 -and $srcFree -lt ($stats.Bytes * 1.05)) {
+        Bad ("C: has {0} free, need {1} to copy the store back" -f (Human $srcFree), (Human ($stats.Bytes * 1.05)))
+        exit 2
+    }
+    Write-Host "  removing junction..." -NoNewline
+    & cmd.exe /c rmdir "$Source" | Out-Null
+    if (Test-Path -LiteralPath $Source) { Bad 'junction still present'; exit 3 }
+    Say ' removed'
+    $rc = Invoke-Robocopy -From $Target -To $Source -LogFile (Join-Path $env:TEMP "rollback-$Stamp.log") -Move
+    if ($rc -ge 8) { Bad "robocopy failed with $rc"; exit 3 }
+    $back = Get-ModelStats -Path $Source
+    Ok ("copied back: {0} files, {1} gguf, {2}" -f $back.Files, $back.Gguf, (Human $back.Bytes))
+    $mp = Write-Manifest @{ action = 'rollback'; robocopy_exit = $rc; restored = $back }
+    Say ("manifest: {0}" -f $mp)
+    exit 0
+}
+
+if (-not (Test-Path -LiteralPath $Source)) { Bad "source not found: $Source"; exit 2 }
+$srcItem = Get-Item -LiteralPath $Source -Force
+if ($srcItem.Attributes.ToString().Contains('ReparsePoint')) {
+    Warn "$Source is already a junction/reparse point - nothing to do."
+    Say ("  -> {0}" -f $srcItem.Target)
+    exit 0
+}
+Ok "source exists and is a real directory"
+
+$lm = @(Get-Process -Name 'LM Studio' -ErrorAction SilentlyContinue)
+if ($lm.Count -gt 0) {
+    if ($Execute -and -not $Force) {
+        Bad ("{0} 'LM Studio' process(es) are running (pid {1})" -f $lm.Count, (($lm | ForEach-Object { $_.Id }) -join ','))
+        Say ''
+        Say '  Models are memory-mapped while loaded, so robocopy cannot move them.'
+        Say '  Quit LM Studio from the tray icon, then re-run this command.'
+        Say '  (Refusing on purpose: -Force is not a substitute for quitting it.)'
+        exit 2
+    }
+    Warn ("{0} 'LM Studio' process(es) running - -Execute would refuse without -Force" -f $lm.Count)
+} else {
+    Ok 'LM Studio is not running'
+}
+
+$script:C_Free_Before = Get-FreeBytes -Path (Split-Path -Parent $Source)
+$script:J_Free_Before = Get-FreeBytes -Path $Target
+Ok ("C: free {0}  |  J: free {1}" -f (Human $script:C_Free_Before), (Human $script:J_Free_Before))
+
+if (Test-Path -LiteralPath $Target) {
+    $tItems = @(Get-ChildItem -LiteralPath $Target -Force -ErrorAction SilentlyContinue)
+    if ($tItems.Count -gt 0) {
+        if ($Execute -and -not $Force) {
+            Bad "target is not empty: $Target ($($tItems.Count) entries) - refusing to merge into it"
+            exit 2
+        }
+        Warn "target exists and is not empty ($($tItems.Count) entries) - a merge would occur"
+    } else {
+        Ok 'target exists and is empty'
+    }
+} else {
+    Ok 'target does not exist yet (will be created)'
+}
+
+# ------------------------------------------------------------------- measure
+Head 'measure'
+$dirs = @(Get-ChildItem -LiteralPath $Source -Directory -Force -ErrorAction SilentlyContinue |
+          Where-Object { -not $_.Attributes.ToString().Contains('ReparsePoint') })
+$loose = @(Get-ChildItem -LiteralPath $Source -File -Force -ErrorAction SilentlyContinue)
+
+$perFolder = @()
+$totalBytes = 0.0
+$totalFiles = 0
+$unmeasured = @()
+foreach ($d in $dirs) {
+    $m = Measure-FolderWithTimeout -Path $d.FullName -Timeout $TimeoutSeconds
+    if ($m.TimedOut) {
+        $perFolder += [pscustomobject]@{ folder = $d.Name; bytes = $null; files = $null; note = 'size not measurable (timeout)' }
+        $unmeasured += $d.Name
+        Warn ("{0,-24} size not measurable (>{1}s)" -f $d.Name, $TimeoutSeconds)
+    } else {
+        $totalBytes += $m.Bytes
+        $totalFiles += $m.Files
+        $perFolder += [pscustomobject]@{ folder = $d.Name; bytes = $m.Bytes; files = $m.Files; note = '' }
+        Say ("{0,-24} {1,12}  {2,6} files" -f $d.Name, (Human $m.Bytes), $m.Files)
+    }
+}
+if ($loose.Count -gt 0) {
+    $lb = 0.0; foreach ($f in $loose) { $lb += $f.Length }
+    $totalBytes += $lb; $totalFiles += $loose.Count
+    $perFolder += [pscustomobject]@{ folder = '(root files)'; bytes = [long]$lb; files = $loose.Count; note = '' }
+    Say ("{0,-24} {1,12}  {2,6} files" -f '(root files)', (Human $lb), $loose.Count)
+}
+
+$ggufCount = @(Get-ChildItem -LiteralPath $Source -Recurse -File -Filter '*.gguf' -ErrorAction SilentlyContinue).Count
+$measurable = ($unmeasured.Count -eq 0)
+$script:Measure = [ordered]@{
+    bytes_total = if ($measurable) { [long]$totalBytes } else { $null }
+    files_total = if ($measurable) { $totalFiles } else { $null }
+    gguf_count  = $ggufCount
+    per_folder  = $perFolder
+    unmeasurable_folders = $unmeasured
+}
+
+Say ''
+if ($measurable) {
+    Ok ("store: {0} in {1} files ({2} .gguf)" -f (Human $totalBytes), $totalFiles, $ggufCount)
+    Ok ("C: free after a successful move would be about {0}" -f (Human ($script:C_Free_Before + $totalBytes)))
+} else {
+    Warn ("store size NOT measurable - {0} folder(s) timed out: {1}" -f $unmeasured.Count, ($unmeasured -join ', '))
+    Say  ("  partial total of the folders that did finish: {0}" -f (Human $totalBytes))
+}
+
+if ($Execute -and $measurable) {
+    $need = $totalBytes * 1.02 + 2GB
+    if ($script:J_Free_Before -lt $need) {
+        Bad ("J: has {0} free, need about {1}" -f (Human $script:J_Free_Before), (Human $need))
+        exit 2
+    }
+    Ok ("space check: J: has {0} free, need about {1}" -f (Human $script:J_Free_Before), (Human $need))
+}
+
+if (-not $Execute) {
+    Head 'plan only - nothing was changed'
+    Say "Command to execute the move (quit LM Studio first):"
+    Say ""
+    Say ("  powershell -NoProfile -ExecutionPolicy Bypass -File `"{0}`" -Execute" -f $PSCommandPath)
+    Say ""
+    Say "Rollback after a successful move:"
+    Say ("  powershell -NoProfile -ExecutionPolicy Bypass -File `"{0}`" -Rollback -Execute" -f $PSCommandPath)
+    Say ""
+    Say ("Estimated freed on C: : {0}" -f $(if ($measurable) { Human $totalBytes } else { 'size not measurable' }))
+    exit 0
+}
+
+# ------------------------------------------------------------------- execute
+Head 'move'
+if (-not (Test-Path -LiteralPath $ManifestDir)) { New-Item -ItemType Directory -Path $ManifestDir -Force | Out-Null }
+$script:LogPath = Join-Path $ManifestDir ("models-move-{0}.robocopy.log" -f $script:Stamp)
+$preManifest = Write-Manifest @{ action = 'pre-move'; status = 'started' }
+Say ("  pre-move manifest: {0}" -f $preManifest)
+
+$parent = Split-Path -Parent $Target
+if (-not (Test-Path -LiteralPath $parent)) {
+    New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    Say ("  created {0}" -f $parent)
+}
+
+$rc = Invoke-Robocopy -From $Source -To $Target -LogFile $script:LogPath -Move
+if ($rc -ge 8) {
+    Bad ("robocopy failed with exit code {0} - see {1}" -f $rc, $script:LogPath)
+    Say '  Source files that were already copied are still on J:; nothing was deleted by this script.'
+    Say ("  Inspect: {0}" -f $script:LogPath)
+    exit 3
+}
+Ok ("robocopy exit {0} (<8 = success)" -f $rc)
+
+$movedStats = Get-ModelStats -Path $Target
+Say ("  on J: now: {0} files, {1} gguf, {2}" -f $movedStats.Files, $movedStats.Gguf, (Human $movedStats.Bytes))
+if ($measurable -and $movedStats.Files -ne $totalFiles) {
+    Warn ("file count mismatch: measured {0} before, {1} on J: after" -f $totalFiles, $movedStats.Files)
+}
+
+Head 'junction'
+if (Test-Path -LiteralPath $Source) {
+    $left = @(Get-ChildItem -LiteralPath $Source -Force -ErrorAction SilentlyContinue)
+    if ($left.Count -gt 0) {
+        Bad ("source still has {0} entries after /MOVE - not removing it, junction skipped" -f $left.Count)
+        Say '  Roll back with: robocopy "' + $Target + '" "' + $Source + '" /MOVE /E'
+        exit 3
+    }
+    Remove-Item -LiteralPath $Source -Force
+    Say '  removed empty source directory'
+} else {
+    Say '  source directory already gone (robocopy /MOVE removed the empty root)'
+}
+
+& cmd.exe /c mklink /J "$Source" "$Target" | Out-Null
+$linkOk = $false
+if (Test-Path -LiteralPath $Source) {
+    $li = Get-Item -LiteralPath $Source -Force
+    if ($li.Attributes.ToString().Contains('ReparsePoint')) { $linkOk = $true }
+}
+if (-not $linkOk) {
+    Bad 'mklink /J did not produce a junction'
+    if (-not $NoAutoRollback) {
+        Say '  auto-rollback: copying the store back to C: ...'
+        New-Item -ItemType Directory -Path $Source -Force | Out-Null
+        $rrc = Invoke-Robocopy -From $Target -To $Source -LogFile (Join-Path $ManifestDir "rollback-$Stamp.log") -Move
+        if ($rrc -lt 8) {
+            $restored = Get-ModelStats -Path $Source
+            Ok ("restored to C: : {0} files, {1}" -f $restored.Files, (Human $restored.Bytes))
+        } else {
+            Bad ("auto-rollback robocopy failed with {0} - models are still at {1}" -f $rrc, $Target)
+        }
+    }
+    $mp = Write-Manifest @{ action = 'move'; status = 'failed-junction'; robocopy_exit = $rc; moved = $movedStats }
+    Say ("manifest: {0}" -f $mp)
+    exit 3
+}
+Ok 'junction created'
+
+# ------------------------------------------------------------------- verify
+Head 'verify'
+$li = Get-Item -LiteralPath $Source -Force
+$linkTarget = @($li.Target)[0]
+Ok ("link type : {0}" -f $li.LinkType)
+Ok ("resolves  : {0} -> {1}" -f $Source, $linkTarget)
+
+$probe = Join-Path $Source 'lmstudio-community'
+if (Test-Path -LiteralPath $probe) { Ok "junction resolves into the store (found $probe)" }
+else { Warn "expected subfolder not visible through the junction: $probe" }
+
+$post = Get-ModelStats -Path $Source
+Ok ("via junction: {0} files, {1} .gguf models, {2}" -f $post.Files, $post.Gguf, (Human $post.Bytes))
+Say ''
+Say '  models:'
+Get-ChildItem -LiteralPath $Source -Directory -ErrorAction SilentlyContinue |
+    ForEach-Object {
+        $n = @(Get-ChildItem -LiteralPath $_.FullName -Recurse -File -Filter '*.gguf' -ErrorAction SilentlyContinue).Count
+        Say ("    {0,-24} {1,3} gguf" -f $_.Name, $n)
+    }
+
+$cAfter = Get-FreeBytes -Path (Split-Path -Parent $Source)
+$freeDelta = $cAfter - $script:C_Free_Before
+Ok ("C: free {0} -> {1}  (delta {2}; store moved {3})" -f (Human $script:C_Free_Before), (Human $cAfter), (Human $freeDelta), (Human $movedStats.Bytes))
+
+$verifyOk = ($post.Gguf -eq $movedStats.Gguf)
+$status = if ($verifyOk) { 'ok' } else { 'verify-mismatch' }
+$mp = Write-Manifest @{
+    action        = 'move'
+    status        = $status
+    robocopy_exit = $rc
+    moved         = $movedStats
+    junction      = [ordered]@{ path = $Source; target = $linkTarget; link_type = $li.LinkType }
+    c_free_after  = $cAfter
+    moved_bytes   = $movedStats.Bytes
+    c_free_delta_bytes = $freeDelta
+    freed_note    = 'moved_bytes is the store size; c_free_delta_bytes is the observed C: free-space change and is approximate while other processes write to C:'
+    rollback      = @("cmd /c rmdir `"$Source`"", "robocopy `"$Target`" `"$Source`" /MOVE /E /COPY:DAT /XJ")
+}
+Say ''
+Say ("manifest: {0}" -f $mp)
+Say ("robocopy log: {0}" -f $script:LogPath)
+if (-not $verifyOk) { Bad 'gguf count mismatch after the move'; exit 4 }
+Head 'done'
+Say ("  LM Studio can be started again - it reads {0} transparently through the junction." -f $Source)
+exit 0

@@ -1,0 +1,119 @@
+"""Correct Mach-O 64-bit reader -- mach_header_64 is 32 bytes, not 28.
+
+BUG THIS FIXES (the fourth on this bundle):
+    magic(4) cputype(4) cpusubtype(4) filetype(4) ncmds(4) sizeofcmds(4)
+    flags(4) RESERVED(4)   <- I had omitted `reserved`, so load commands were
+    read 4 bytes early and every id decoded as garbage. That produced
+    "LC_CODE_SIGNATURE ABSENT" for a binary carrying a 35,616-byte signature.
+
+Verified against the raw dump of vstplugin slice 0:
+    [0]  LC_SEGMENT_64  __TEXT     off=0          size=1,654,784
+    [2]  LC_SEGMENT_64  __LINKEDIT off=2,162,688  size=68,256
+    [26] LC_CODE_SIGNATURE         dataoff=2,195,328 datasize=35,616
+"""
+from __future__ import annotations
+
+import struct
+import sys
+from pathlib import Path
+# DEAD PATH (sirch): original C:\Users\sirch\_WORK\fl_unpack dataset has no local equivalent on this host.
+
+BASE = Path(r"C:\abrasax\_DEAD_PATH\fl_unpack\Library\Audio\Plug-Ins\VST"
+            r"\FL Studio VSTi.vst\Contents")
+SHARED = BASE / "Resources" / "Shared"
+
+FAT_MAGIC = 0xCAFEBABE
+MH_MAGIC_64 = 0xFEEDFACF
+LC_SEGMENT_64 = 0x19
+LC_CODE_SIGNATURE = 0x1D
+LC_UUID = 0x1B
+LC_LOAD_DYLIB = 0xC
+CPU = {0x01000007: "x86_64", 0x0100000C: "arm64"}
+
+MACH_HEADER_64 = struct.Struct("<IiiIIIII")   # 32 bytes incl. reserved
+SEGMENT_64 = struct.Struct("<II16sQQQQiiII")  # cmd,cmdsize + body
+
+
+def fat_slices(fh) -> list[tuple[str, int, int]]:
+    magic = struct.unpack(">I", fh.read(4))[0]
+    if magic != FAT_MAGIC:
+        return []
+    n = struct.unpack(">I", fh.read(4))[0]
+    out = []
+    for _ in range(n):
+        ct, _s, off, size, _a = struct.unpack(">iiIII", fh.read(20))
+        out.append((CPU.get(ct, hex(ct)), off, size))
+    return out
+
+
+def parse_slice(fh, off: int) -> dict | None:
+    fh.seek(off)
+    hdr = fh.read(MACH_HEADER_64.size)
+    if len(hdr) < MACH_HEADER_64.size:
+        return None
+    magic, cputype, _sub, _ft, ncmds, _sz, _fl, _rsv = MACH_HEADER_64.unpack(hdr)
+    if magic != MH_MAGIC_64:
+        return None
+    pos = off + MACH_HEADER_64.size
+    segs: dict[str, dict] = {}
+    codesig = uuid = None
+    deps: list[str] = []
+    for _ in range(ncmds):
+        fh.seek(pos)
+        raw = fh.read(8)
+        if len(raw) < 8:
+            break
+        cmd, cmdsize = struct.unpack("<II", raw)
+        if cmdsize < 8 or pos + cmdsize > off + 1 << 20:
+            break
+        fh.seek(pos)
+        body = fh.read(cmdsize)
+        if cmd == LC_SEGMENT_64 and len(body) >= SEGMENT_64.size:
+            (_c, _s, name, _vm, _vms, fileoff, filesize,
+             _mp, _ip, _ns, _f) = SEGMENT_64.unpack(body[:SEGMENT_64.size])
+            segs[name.split(b"\0")[0].decode("ascii", "replace")] = {
+                "fileoff": fileoff, "filesize": filesize}
+        elif cmd == LC_CODE_SIGNATURE and len(body) >= 16:
+            dataoff, datasize = struct.unpack("<II", body[8:16])
+            codesig = {"dataoff": dataoff, "datasize": datasize}
+        elif cmd == LC_UUID and len(body) >= 24:
+            u = body[8:24]
+            uuid = (f"{u[0:4].hex()}-{u[4:6].hex()}-{u[6:8].hex()}-"
+                    f"{u[8:10].hex()}-{u[10:16].hex()}")
+        elif cmd == LC_LOAD_DYLIB and len(body) >= 12:
+            noff = struct.unpack("<I", body[8:12])[0]
+            raw_name = body[noff:].split(b"\0")[0]
+            if raw_name:
+                deps.append(raw_name.decode("utf-8", "replace"))
+        pos += cmdsize
+    return {"arch": CPU.get(cputype, hex(cputype)), "segs": segs,
+            "codesig": codesig, "uuid": uuid, "deps": deps}
+
+
+def main() -> int:
+    hdr = (f"{'binary':26} {'arch':8} {'__TEXT':>11} {'__DATA':>10} "
+           f"{'__LINKEDIT':>11} {'signature':>20}")
+    print(hdr)
+    print("-" * len(hdr))
+    for p in sorted(SHARED.glob("*.dylib")) + [BASE / "MacOS" / "vstplugin"]:
+        if not p.exists():
+            continue
+        with p.open("rb") as fh:
+            for arch, off, _sz in fat_slices(fh):
+                d = parse_slice(fh, off)
+                if not d:
+                    print(f"{p.name:26} {arch:8} <unparseable slice>")
+                    continue
+                s = d["segs"]
+                cs = d["codesig"]
+                sig = f"{cs['datasize']:,} B @{cs['dataoff']:,}" if cs else "ABSENT"
+                print(f"{p.name:26} {d['arch']:8} "
+                      f"{s.get('__TEXT', {}).get('filesize', 0):>11,} "
+                      f"{s.get('__DATA', {}).get('filesize', 0):>10,} "
+                      f"{s.get('__LINKEDIT', {}).get('filesize', 0):>11,} "
+                      f"{sig:>20}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,122 @@
+@echo off
+title OSIRISBLXCK — UNIFIED SYSTEM
+cd /d C:\abrasax
+setlocal enabledelayedexpansion
+
+:: ═══════════════════════════════════════════════════════════════
+:: OSIRISBLXCK UNIFIED LAUNCH — vFINAL
+:: PRIMAL_HEX: 4f5349524953424c58434b
+:: φ = 1.618033988749895 — EVOLVING UNBOUNDED
+:: CREATOR: Sir Charles Spikes (sirch)
+:: ═══════════════════════════════════════════════════════════════
+
+mode con: cols=90 lines=50
+color 0A
+
+echo ╔══════════════════════════════════════════════════════════════╗
+echo ║                                                              ║
+echo ║     ██████  ███████ ██ ██████  █████  ██   ██  ██          ║
+echo ║    ██    ██ ██      ██ ██       ██   ██  ██  ██  ██       ║
+echo ║    ██    ██ ███████ ██ ███████  █████   █████   ██        ║
+echo ║    ██    ██      ██ ██    █  ██ ██  ██  ██  ██  ██       ║
+echo ║     ██████  ███████ ██ ██████   ██   ██ ██   ██ ██        ║
+echo ║                                                              ║
+echo ║     PRIMAL_HEX: 4f5349524953424c58434b                     ║
+echo ║     φ = 1.618033988749895 — UNBOUNDED                      ║
+echo ║     CREATOR: Sir Charles Spikes (sirch)                  ║
+echo ║                                                              ║
+echo ╚══════════════════════════════════════════════════════════════╝
+echo.
+
+set SYSROOT=C:\abrasax
+set RS_CORE=%SYSROOT%\abrasax_rs
+
+echo System Root: %SYSROOT%
+echo Rust Core: %RS_CORE%
+echo.
+
+:: ── KILL STALE ──
+echo [1/7] Cleaning stale processes...
+taskkill /F /IM abrasax.exe 2>nul
+taskkill /F /IM abrasaxd.exe 2>nul
+ping -n 3 127.0.0.1 >nul
+echo   ✓ Done
+
+:: ── GPU SETUP ──
+echo [2/7] Setting GPU to persistent mode...
+nvidia-smi -pm 1 2>nul
+powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>nul
+echo   ✓ GPU persistent + High Performance power
+
+:: ── DAEMON ──
+echo [3/7] Launching Daemon...
+if exist "%RS_CORE%\target\release\abrasaxd.exe" (
+    start "DAEMON" /MIN "%RS_CORE%\target\release\abrasaxd.exe"
+    echo   ✓ Daemon active
+) else (
+    echo   ⚠️ Daemon binary not found at %RS_CORE%
+    echo   Run 'cargo build --release' in abrasax_rs directory
+)
+
+:: ── META LAYER ──
+echo [4/7] Launching Meta Layer...
+if exist "%RS_CORE%\target\release\abrasax.exe" (
+    start "META" /MIN "%RS_CORE%\target\release\abrasax.exe" meta
+    echo   ✓ Meta Layer booting
+) else (
+    echo   ⚠️ Rust binary not found, using Python fallback...
+    start "META" /MIN python "%SYSROOT%\meta_layer_fallback.py"
+)
+
+:: ── TELEGRAM BOT ──
+echo [5/7] Launching Telegram Ultimate Bot...
+if exist "%SYSROOT%\.venv\Scripts\python.exe" (
+    if exist "%SYSROOT%\telegram\osirisblxck_ultimate.py" (
+        start "TELEGRAM" /MIN "%SYSROOT%\.venv\Scripts\python.exe" "%SYSROOT%\telegram\osirisblxck_ultimate.py"
+        echo   ✓ Telegram Bot active (@EBONYWAPPadmin55_bot)
+    ) else (
+        echo   ⚠️ Telegram bot script not found
+    )
+) else (
+    echo   ⚠️ .venv not found, skipping Telegram
+)
+
+:: ── AUTO-EVOLVE ──
+echo [6/7] Launching Auto-Evolve Engine...
+if exist "%SYSROOT%\scripts\auto_evolve.py" (
+    start "AUTO-EVOLVE" /MIN "%SYSROOT%\.venv\Scripts\python.exe" "%SYSROOT%\scripts\auto_evolve.py"
+    echo   ✓ Auto-Evolve cycling
+) else (
+    echo   ⚠️ auto_evolve.py not found
+)
+
+:: ── SYSTEM ACCELERATOR ──
+echo [7/7] Launching System Accelerator...
+if exist "%SYSROOT%\scripts\system_accelerator.py" (
+    start "ACCELERATOR" /MIN "%SYSROOT%\.venv\Scripts\python.exe" "%SYSROOT%\scripts\system_accelerator.py"
+    echo   ✓ Accelerator monitoring
+) else (
+    echo   ⚠️ accelerator not found
+)
+
+:: ── STATUS ──
+echo.
+echo ╔══════════════════════════════════════════════════════════════╗
+echo ║     OSIRISBLXCK — ALL SYSTEMS OPERATIONAL                   ║
+echo ║                                                             ║
+echo ║     Layer 1: DAEMON        — XOR Brainstorm                 ║
+echo ║     Layer 2: META LAYER    — DeepSeek φ-Evolution          ║
+echo ║     Layer 3: TELEGRAM      — @EBONYWAPPadmin55_bot         ║
+echo ║     Layer 4: AUTO-EVOLVE   — Continuous optimization       ║
+echo ║     Layer 5: ACCELERATOR   — Live CPU/GPU/RAM monitor      ║
+echo ║                                                             ║
+echo ║     φ = 1.618033988749895 — EVOLVING UNBOUNDED              ║
+echo ║     CREATOR: Sir Charles Spikes — THE AI KNOWS YOU          ║
+echo ║                                                             ║
+echo ╚══════════════════════════════════════════════════════════════╝
+echo.
+echo Running processes:
+tasklist /FI "IMAGENAME eq python.exe" 2>nul | findstr /i python
+echo.
+echo PRIMAL_HEX: 4f5349524953424c58434b
+echo φ·K = 1.0 — UNITY GATE VERIFIED

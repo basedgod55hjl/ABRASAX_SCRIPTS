@@ -1,4 +1,0 @@
-Archived by M-3/6 (report 46 §4) 2026-09-06T14:20:24Z.
-cp-first ONLY — originals preserved under _ARCHIVE/stale-scripts-2026-09-06/.
-Files archived from this directory (1):
-  arrange_pi_windows.ps1

@@ -1,0 +1,383 @@
+"""ABRASAX supervisor — 30s automation loop.
+
+Every tick:
+  1. probe every service in abrasax.services (parallel TCP, 0.6s)
+  2. auto-start any down service on the AUTOSTART allowlist (cooldown 180s)
+  3. integrity-check the root tree (expected dirs / key files)
+  4. append a ledger event + rewrite state + heartbeat
+
+Usage:
+    python supervisor.py                # resident, 30s ticks
+    python supervisor.py --once        # single tick (debug)
+    python supervisor.py --dry-run     # probe + integrity only, never start
+    python supervisor.py --interval 30 # custom tick seconds
+
+The resident run is idempotent: a PID lock in LOGS/supervisor.pid keeps a
+second instance from starting (safe to relaunch from the watchdog task).
+"""
+from __future__ import annotations
+
+import argparse
+import ctypes
+import datetime as dt
+import json
+import os
+import shutil
+import socket
+import subprocess
+import threading
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(os.environ.get("ABRASAX_ROOT") or Path(__file__).resolve().parents[2])
+_IMG_ROOT = Path(os.environ.get("ABRASAX_IMG_ROOT") or (ROOT / "TOOLS" / "AI-ImageGen"))
+_IMG_PY = _IMG_ROOT / "Data" / "Packages" / "ComfyUI" / "venv" / "Scripts" / "python.exe"
+_LLAMA_HOME = ROOT / "BUILD" / "llamacpp" / "build" / "bin"
+_LLAMA = _LLAMA_HOME / "llama-server.exe"
+_LLAMA_MODEL = Path(r"C:\Users\sirch\.lmstudio\models\lmstudio-community\LFM2.5-1.2B-Instruct-GGUF\LFM2.5-1.2B-Instruct-Q6_K.gguf")
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from abrasax import services  # noqa: E402
+
+LOGS = ROOT / "LOGS"
+LEDGER = LOGS / "supervisor-ledger.jsonl"
+STATE = LOGS / "supervisor-state.json"
+HEARTBEAT = LOGS / "supervisor-heartbeat.txt"
+PIDFILE = LOGS / "supervisor.pid"
+
+EXPECTED_DIRS = [
+    "AGENTS", "APPS", "ARCHIVE", "CONFIG", "CORE", "DATA", "DOC", "ENGINE",
+    "GATEWAY", "LOGS", "MCP", "MODELS", "PROJECTS", "PYTHON", "RUST",
+    "SCRIPTS", "SEEDS", "SOURCE", "SYSTEMS", "TESTS", "TOOLS", "TYPESCRIPT",
+    "UI", "VENDORS", "_VAULT",
+]
+EXPECTED_FILES = [
+    ".env", "pyproject.toml", "abrasax/__init__.py", "abrasax/gateway.py",
+    "AGENTS/ROLES/registry.json", "CONFIG/llm/providers.json",
+    "ENGINE/abrasax_engine/__init__.py",
+]
+
+_SUB = ROOT / "TOOLS" / "source-tools" / "subsystems"
+_NODE = shutil.which("node") or "node"
+_DOTNET = shutil.which("dotnet") or "dotnet"
+
+
+def _codec_cmd() -> list[str]:
+    """Run the built DLL through the dotnet host.
+
+    The native apphost (codec_gateway.exe) inherits the Low mandatory integrity label of
+    TOOLS/source-tools, so HTTP.sys rejects its HttpListener session (error 6). `dotnet <dll>`
+    runs from the user profile and binds fine. Prefer Release, then Debug, then apphost.
+    """
+    for cfg in ("Release", "Debug"):
+        for dll in (_SUB / "codec_gateway" / "bin" / cfg).glob("*/codec_gateway.dll"):
+            return [_DOTNET, str(dll)]
+    for exe in (_SUB / "codec_gateway" / "bin").glob("**/codec_gateway.exe"):
+        return [str(exe)]
+    return [_DOTNET, "run", "--no-build"]
+
+
+_FB_BIN = ROOT / "ENGINE" / "floating_brain" / "cuda" / "bin"
+
+AUTOSTART: dict[str, dict] = {
+    "floating-brain": {
+        # The GPU renderer that the ImGui overlay and the Unity client consume.
+        # Measured 2026-10-18: it died during a test run and nothing noticed,
+        # because it was in neither SERVICES nor AUTOSTART. Port bind is the
+        # mutex, so no pid file is needed.
+        "cmd": [str(_FB_BIN / "fb_server.exe"), "9700", "fb_kernels.cubin",
+                "index.html"],
+        "cwd": _FB_BIN,
+    },
+    "abrasax-gateway": {
+        "cmd": [sys.executable, "-m", "abrasax", "gateway", "--port", "9001"],
+        "cwd": ROOT,
+    },
+    "node-lm": {
+        "cmd": [_NODE, "server.mjs"],
+        "cwd": _SUB / "node_lm_server",
+    },
+    "filetool": {
+        "cmd": [sys.executable, "filetool.py"],
+        "cwd": _SUB / "filetool",
+    },
+    "abrasax-brain": {
+        "cmd": [sys.executable, "-m", "abrasax.brain", "serve", "--port", "9626"],
+        "cwd": ROOT,
+    },
+    "jev-brain-bridge": {
+        # Feeds LOGS/brain_state.json for the overlay. No socket to probe, so
+        # liveness is judged by the "heartbeat" field it writes each cycle.
+        "cmd": [sys.executable, "-u", "jev_brain_state.py"],
+        "cwd": ROOT / "ENGINE" / "floating_brain",
+    },
+    "floating-brain-overlay": {
+        # The HUD itself. It exposes /health on 9627 precisely so this watchdog
+        # can see it: measured 2026-10-18 it was dying with nobody noticing
+        # because supervisor.tick() skips any service without a port.
+        "cmd": [sys.executable, "ENGINE/floating_brain/imgui_overlay.py",
+                "--width", "760", "--height", "760", "--topmost",
+                "--borderless"],
+        "cwd": ROOT,
+    },
+    "abrasax-ui": {
+        "cmd": [sys.executable, "-m", "http.server", "8090", "--bind", "127.0.0.1"],
+        "cwd": ROOT / "UI" / "abrasax-ui" / "web",
+    },
+    "cellbrain": {
+        "cmd": [sys.executable, "abraxas_cellbrain.py", "--serve", "--port", "9624",
+                "--autoloop", "5", "--reciprocal"],
+        "cwd": _SUB / ".." / "brains",
+    },
+    "synaptic-brain": {
+        "cmd": [sys.executable, "abraxas_synaptic_server.py", "--serve", "--port", "9625",
+                "--autoloop", "5", "--resume"],
+        "cwd": _SUB / ".." / "brains",
+    },
+    "routerfail": {
+        "cmd": [sys.executable, "routerfail.py"],
+        "cwd": _SUB / "routerfail",
+    },
+    "llamacpp-local": {
+        "cmd": [_LLAMA, "--model", _LLAMA_MODEL, "--port", "8083",
+                "--host", "127.0.0.1", "-ngl", "99", "-c", "4096"],
+        "cwd": _LLAMA_HOME,
+    },
+    "imagegen": {
+        "cmd": [_IMG_PY, str(_IMG_ROOT / "scripts" / "imagegen_server.py")],
+        "cwd": _IMG_ROOT,
+    },
+    "harvest-helper": {
+        "cmd": [_NODE, "server.js"],
+        "cwd": _SUB / "media-grabber" / "helper",
+    },
+    "codec-gateway": {
+        "cmd": _codec_cmd(),
+        "cwd": _SUB / "codec_gateway",
+    },
+}
+
+COOLDOWN_S = 180
+_last_start: dict[str, float] = {}
+
+
+def _now() -> str:
+    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)
+        if not handle:
+            return False
+        ctypes.windll.kernel32.CloseHandle(handle)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _rotate(path: Path, limit: int = 5 * 1024 * 1024) -> None:
+    try:
+        if path.exists() and path.stat().st_size > limit:
+            old = path.with_suffix(path.suffix + ".1")
+            if old.exists():
+                old.unlink()
+            path.rename(old)
+    except OSError:
+        pass
+
+
+def _ledger(event: dict) -> None:
+    try:
+        LOGS.mkdir(parents=True, exist_ok=True)
+        _rotate(LEDGER)
+        with LEDGER.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"ts": _now(), **event}, default=str) + "\n")
+    except OSError:
+        pass
+
+
+def _start_service(service_id: str, spec: dict) -> dict:
+    cwd = Path(spec["cwd"])
+    log_path = LOGS / f"svc-{service_id}.log"
+    try:
+        LOGS.mkdir(parents=True, exist_ok=True)
+        out = open(log_path, "ab")  # noqa: SIM115 - child keeps the handle
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | \
+            getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        proc = subprocess.Popen(
+            spec["cmd"], cwd=str(cwd), stdout=out, stderr=out,
+            stdin=subprocess.DEVNULL, creationflags=flags, close_fds=True,
+        )
+        return {"pid": proc.pid, "cmd": spec["cmd"], "cwd": str(cwd)}
+    except Exception as exc:  # noqa: BLE001
+        return {"error": repr(exc)}
+
+
+def integrity() -> dict:
+    missing_dirs = [d for d in EXPECTED_DIRS if not (ROOT / d).is_dir()]
+    missing_files = [f for f in EXPECTED_FILES if not (ROOT / f).exists()]
+    return {"missing_dirs": missing_dirs, "missing_files": missing_files,
+            "ok": not missing_dirs and not missing_files}
+
+
+def _port_open(port: int, timeout: float = 0.4) -> bool:
+    """True when something accepts TCP on the port.
+
+    The health probe is HTTP with a 0.6 s budget; a service that is listening but
+    slow to answer used to be classified 'down' and a second instance was spawned
+    after the cooldown (SO_REUSEADDR then allowed both to bind). This guard makes
+    'a listener exists' sufficient reason not to start another one.
+
+    Measured 2026-11-01: `socket.create_connection(..., timeout=1.2)` blocked the
+    supervisor loop indefinitely (main thread parked in socket.py:836 from here,
+    zero CPU, heartbeat frozen). The socket timeout does not reliably interrupt a
+    connect() on this host, so the call is driven on a daemon thread and given a
+    hard wall. A stuck connect can then only strand its own thread - which is
+    daemonised precisely so it can never keep the supervisor alive or block it.
+    """
+    deadline = float(timeout)
+    result = {"open": False}
+
+    def _connect() -> None:
+        s = None
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(deadline)
+            s.connect(("127.0.0.1", int(port)))
+            result["open"] = True
+        except OSError:
+            pass
+        finally:
+            if s is not None:
+                try:
+                    s.close()
+                except OSError:
+                    pass
+
+    t = threading.Thread(target=_connect, name=f"portprobe-{port}", daemon=True)
+    t.start()
+    # Small slack on top of the socket timeout; never return before the probe
+    # has had its full budget, never wait meaningfully longer than that.
+    t.join(deadline + 0.8)
+    return result["open"]
+
+
+def tick(interval: int, dry_run: bool = False, quiet: bool = False) -> dict:
+    # 0.6 s was measured as too tight on this host: with the GPU busy the brain and
+    # UI legitimately take several seconds to answer, the tick declared them down and
+    # started duplicates (21 brain listeners once). Two seconds still catches a real
+    # hang, and the 6 s retry below keeps a slow-but-alive service out of the restart path.
+    rows = services.health(timeout=2.0)
+    ts = _now()
+    events: list[dict] = []
+    started: list[str] = []
+
+    for row in rows:
+        sid = row["id"]
+        if row.get("port") is None:
+            continue
+        if row.get("up"):
+            events.append({"svc": sid, "state": "up",
+                           "ms": row.get("latency_ms")})
+            continue
+        events.append({"svc": sid, "state": "down"})
+        if _port_open(row["port"], 1.2):
+            # listener exists, health endpoint was merely slow
+            events.append({"svc": sid, "state": "up", "note": "port-live"})
+            continue
+        # Second opinion with a generous budget: a busy service can miss the
+        # 0.6 s probe while still being alive. Observed 2026-10-24: abrasax-brain
+        # was restarted at 10:47 after one timed-out probe and both listeners
+        # then shared :9626 under SO_REUSEADDR.
+        try:
+            again = [r for r in services.health(timeout=6.0) if r.get("id") == sid]
+        except Exception:
+            again = []
+        if again and again[0].get("up"):
+            events.append({"svc": sid, "state": "up", "note": "slow-health"})
+            continue
+        spec = AUTOSTART.get(sid)
+        if not spec or dry_run:
+            continue
+        last = _last_start.get(sid, 0.0)
+        if time.time() - last < COOLDOWN_S:
+            continue
+        _last_start[sid] = time.time()
+        result = _start_service(sid, spec)
+        started.append(sid)
+        _ledger({"event": "start", "svc": sid, **result})
+        events.append({"svc": sid, "state": "started", **result})
+
+    chk = integrity()
+    if not chk["ok"]:
+        _ledger({"event": "missing", **chk})
+
+    summary = {
+        "ts": ts, "tick_interval_s": interval, "dry_run": dry_run,
+        "up": [e["svc"] for e in events if e.get("state") == "up"],
+        "down": [e["svc"] for e in events if e.get("state") == "down"],
+        "started": started, "integrity_ok": chk["ok"],
+        "missing_dirs": chk["missing_dirs"],
+        "missing_files": chk["missing_files"],
+    }
+    try:
+        LOGS.mkdir(parents=True, exist_ok=True)
+        STATE.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        HEARTBEAT.write_text(f"{ts} pid={os.getpid()} up={len(summary['up'])} "
+                             f"down={len(summary['down'])} "
+                             f"started={len(started)} integrity_ok={chk['ok']}\n",
+                             encoding="utf-8")
+    except OSError:
+        pass
+    _ledger({"event": "tick", **summary})
+    if not quiet:
+        print(f"[{ts}] up={len(summary['up'])} down={len(summary['down'])} "
+              f"started={started or '-'} integrity={'OK' if chk['ok'] else chk}",
+              flush=True)
+    return summary
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="supervisor")
+    ap.add_argument("--once", action="store_true")
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--interval", type=int, default=30)
+    ap.add_argument("--quiet", action="store_true")
+    args = ap.parse_args(argv)
+
+    LOGS.mkdir(parents=True, exist_ok=True)
+    if not args.once:
+        if PIDFILE.exists():
+            try:
+                pid = int(PIDFILE.read_text().strip())
+            except (OSError, ValueError):
+                pid = 0
+            if pid and pid != os.getpid() and _pid_alive(pid):
+                print(f"supervisor already running (pid {pid}); exiting")
+                return 0
+        PIDFILE.write_text(str(os.getpid()), encoding="utf-8")
+
+    try:
+        if args.once:
+            tick(args.interval, dry_run=args.dry_run, quiet=args.quiet)
+            return 0
+        while True:
+            try:
+                tick(args.interval, dry_run=args.dry_run, quiet=args.quiet)
+            except Exception as exc:  # noqa: BLE001 - loop must survive
+                _ledger({"event": "tick_error", "error": repr(exc)})
+            time.sleep(max(5, args.interval))
+    finally:
+        if not args.once:
+            try:
+                PIDFILE.unlink()
+            except OSError:
+                pass
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

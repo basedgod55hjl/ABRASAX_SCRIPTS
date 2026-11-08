@@ -1,0 +1,52 @@
+param(
+    [string]$Source = 'C:\Users\lucar\Downloads\Telegram Desktop',
+    [string]$OutDir = 'C:\ABRASAX\DATA\telegram-desktop\ocr',
+    [int]$Limit = 0
+)
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType=WindowsRuntime]
+$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType=WindowsRuntime]
+$null = [Windows.Storage.StorageFile, Windows.Foundation, ContentType=WindowsRuntime]
+
+$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+    $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1'
+})[0]
+
+function Await($WinRtTask, $ResultType) {
+    $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)
+    $netTask = $asTask.Invoke($null, @($WinRtTask))
+    $netTask.Wait(-1) | Out-Null
+    $netTask.Result
+}
+
+$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+if (-not $engine) { Write-Error 'No OCR engine available'; exit 1 }
+
+New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+$log = Join-Path $OutDir '_ocr-progress.log'
+
+$files = Get-ChildItem -LiteralPath $Source -Recurse -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.Extension -match '^\.(png|jpg|jpeg|bmp)$' }
+if ($Limit -gt 0) { $files = $files | Select-Object -First $Limit }
+$n = 0; $ok = 0; $skip = 0; $err = 0
+foreach ($f in $files) {
+    $n++
+    $rel = $f.FullName.Substring($Source.Length).TrimStart('\')
+    $target = (Join-Path $OutDir ($rel -replace '[\\/:*?"<>|]', '_')) -replace '\.(png|jpg|jpeg|bmp)$', '.txt'
+    if (Test-Path -LiteralPath $target) { $skip++; continue }
+    try {
+        $sf = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($f.FullName)) ([Windows.Storage.StorageFile])
+        $stream = Await ($sf.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])
+        $decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
+        $bitmap = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
+        $result = Await ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
+        Set-Content -LiteralPath $target -Value $result.Text -Encoding UTF8
+        $bitmap.Dispose(); $stream.Dispose()
+        $ok++
+    } catch {
+        $err++
+        Add-Content -LiteralPath $log -Value ("ERR {0} :: {1}" -f $rel, $_.Exception.Message)
+    }
+    if ($n % 25 -eq 0) { Add-Content -LiteralPath $log -Value ("PROGRESS {0}/{1} ok={2} err={3} skip={4} at {5}" -f $n, $files.Count, $ok, $err, $skip, (Get-Date -Format o)) }
+}
+Add-Content -LiteralPath $log -Value ("DONE {0} files ok={1} err={2} skip={3} at {4}" -f $n, $ok, $err, $skip, (Get-Date -Format o))

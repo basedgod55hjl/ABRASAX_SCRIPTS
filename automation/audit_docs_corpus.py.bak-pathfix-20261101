@@ -1,0 +1,126 @@
+"""Audit the documentation corpus before ingesting any of it.
+
+"Live documentation ingestion and self-acceleration" means feeding the project's own
+docs back into the system so it can act on what it knows. That is only safe if the
+corpus is characterised first: tonight alone, DOC/FINAL_RUN_STATE.md claimed
+:9000 ONLINE while it was down, and CONFIG held a live API key.
+
+22,948 .md files is far too many to ingest blind -- most are a crawled third-party
+corpus. This audit separates:
+
+  AUTHORED     first-party docs under DOC/ root and DOC/REPORTS -- written by this
+               project, describing this project
+  CRAWLED      the vendored corpora (source-docs, rust-docs, notebooks-rust, ...)
+               -- huge, not ours, no refresh path
+  AGENT        AGENTS/ROLES doctrine, which the swarm reads as system prompts
+
+and measures freshness, because a doc that describes a retired tree is worse than
+no doc: it will be believed.
+
+Read-only.
+"""
+import os
+import re
+import sys
+import time
+from collections import defaultdict
+
+ROOT = r"C:\ABRASAX"
+DOC = os.path.join(ROOT, "DOC")
+
+CRAWLED_DIRS = {"source-docs", "rust-docs", "notebooks-rust", "source-knowledge",
+                "source-reports", "source-root-docs", "rust-root-docs",
+                "source-catalogs", "original-docs", "source-docs2"}
+
+# claims that can be checked against the live system
+CHECKABLE = [
+    (re.compile(r":(\d{4})\s*(?:/health)?"), "port reference"),
+    (re.compile(r"(ONLINE|LISTENING|UP|DOWN)\b"), "status word"),
+    (re.compile(r"\b(passing|green|\d+ passed)\b", re.I), "test claim"),
+]
+
+buckets = defaultdict(list)
+for dp, dn, fns in os.walk(DOC):
+    dn[:] = [d for d in dn if d != "__pycache__"]
+    for fn in fns:
+        if not fn.endswith(".md"):
+            continue
+        full = os.path.join(dp, fn)
+        rel = os.path.relpath(full, DOC).replace(os.sep, "/")
+        top = rel.split("/")[0] if "/" in rel else "(root)"
+        if top in CRAWLED_DIRS:
+            cls = "CRAWLED"
+        elif top == "REPORTS":
+            cls = "REPORT"
+        elif top == "(root)":
+            cls = "AUTHORED"
+        else:
+            cls = "OTHER"
+        try:
+            st = os.stat(full)
+        except OSError:
+            continue
+        buckets[cls].append((rel, st.st_size, st.st_mtime))
+
+print("=== DOC CORPUS BY CLASS ===")
+for cls in ("AUTHORED", "REPORT", "OTHER", "CRAWLED"):
+    rows = buckets.get(cls, [])
+    mb = sum(r[1] for r in rows) / 1e6
+    print(f"  {cls:9s} {len(rows):6d} file(s)  {mb:8.1f} MB")
+
+total = sum(len(v) for v in buckets.values())
+print(f"  {'TOTAL':9s} {total:6d} file(s)")
+
+# ---- freshness of the docs that matter ---------------------------------
+now = time.time()
+print("\n=== AUTHORED DOCS: FRESHNESS (these are the ingestable ones) ===")
+auth = sorted(buckets.get("AUTHORED", []), key=lambda r: -r[2])
+fresh_24h = sum(1 for _, _, m in auth if now - m < 86400)
+fresh_7d = sum(1 for _, _, m in auth if now - m < 7 * 86400)
+stale = sum(1 for _, _, m in auth if now - m > 30 * 86400)
+print(f"  modified in last 24h : {fresh_24h}")
+print(f"  modified in last 7d  : {fresh_7d}")
+print(f"  older than 30d       : {stale}")
+print(f"  most recent {min(8, len(auth))}:")
+for rel, sz, m in auth[:8]:
+    age_h = (now - m) / 3600
+    print(f"    {age_h:7.1f} h old  {sz:7d} B  {rel}")
+
+# ---- which docs make checkable claims? ---------------------------------
+print("\n=== DOCS MAKING CHECKABLE CLAIMS (ports / status / test counts) ===")
+claim_docs = []
+for rel, sz, m in auth + buckets.get("REPORT", []):
+    full = os.path.join(DOC, rel.replace("/", os.sep))
+    try:
+        text = open(full, encoding="utf-8", errors="ignore").read()
+    except OSError:
+        continue
+    hits = []
+    for rx, label in CHECKABLE:
+        if rx.search(text):
+            hits.append(label)
+    if "port reference" in hits:
+        claim_docs.append((rel, len(hits), sorted(set(hits))))
+claim_docs.sort(key=lambda t: -t[1])
+for rel, n, kinds in claim_docs[:15]:
+    print(f"  {n:3d} claim-type(s)  {rel}  [{', '.join(kinds)}]")
+print(f"  {len(claim_docs)} document(s) make port-level claims that a live check could falsify")
+
+# ---- the self-acceleration inputs --------------------------------------
+print("\n=== SELF-ACCELERATION INPUTS ALREADY PRESENT ===")
+nlm = r"C:\Users\sirch\.local\bin\nlm.exe"
+print(f"  NotebookLM CLI : {'present' if os.path.exists(nlm) else 'absent'}")
+agents_roles = os.path.join(ROOT, "AGENTS", "ROLES")
+if os.path.isdir(agents_roles):
+    n = len([f for f in os.listdir(agents_roles) if f.endswith(".md")])
+    print(f"  agent doctrine : {n} role files under AGENTS/ROLES")
+mem_db = os.path.join(ROOT, "DATA", "runtime-memory", "abrasax_memory.db")
+if os.path.exists(mem_db):
+    print(f"  memory store   : {mem_db} ({os.path.getsize(mem_db):,} bytes)")
+hb = os.path.join(ROOT, "LOGS", "alive-bind.jsonl")
+if os.path.exists(hb):
+    n = sum(1 for _ in open(hb, encoding="utf-8", errors="replace"))
+    print(f"  agent activity : {n} alive-bind cycles logged")
+
+print("\nRESULT: audit only")
+sys.exit(0)

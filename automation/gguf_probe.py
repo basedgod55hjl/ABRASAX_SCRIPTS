@@ -1,0 +1,151 @@
+"""Read GGUF metadata straight from the file header -- no LM Studio involved.
+
+Correctness notes that cost two debug cycles:
+  * GGUF v3 keys/strings are uint64-length; v1/v2 are uint32.
+  * Array COUNT is uint64 in v3; the element type is uint32.
+  * A skipped/large array must be SEEKED past using its element size, never
+    "returned early" -- leaving the stream mid-array desyncs every later key
+    and produces MemoryError on a garbage length.
+"""
+from __future__ import annotations
+
+import struct
+import sys
+from pathlib import Path
+
+GGUF_MAGIC = 0x46554747
+SCALAR = {0: "<B", 1: "<b", 2: "<H", 3: "<h", 4: "<I", 5: "<i", 6: "<f", 7: "<?",
+          9: "<Q", 10: "<q", 11: "<d", 12: "<Q"}
+STRING, ARRAY = 8, 9
+
+
+class Reader:
+    def __init__(self, fh, version: int):
+        self.fh, self.v = fh, version
+
+    def _len(self) -> int:
+        return struct.unpack("<I", self.fh.read(4))[0] if self.v < 3 \
+            else struct.unpack("<Q", self.fh.read(8))[0]
+
+    def u32(self) -> int:
+        return struct.unpack("<I", self.fh.read(4))[0]
+
+    def u64(self) -> int:
+        return struct.unpack("<Q", self.fh.read(8))[0]
+
+    def gstr(self) -> str:
+        n = self._len()
+        if n > 1 << 20:
+            raise ValueError(f"absurd string len {n} at {self.fh.tell()}")
+        return self.fh.read(n).decode("utf-8", "replace")
+
+    def skip_value(self, t: int) -> None:
+        """Advance past one value without materialising it."""
+        if t == STRING:
+            self.fh.seek(self._len(), 1)
+        elif t == ARRAY:
+            at = self.u32()
+            n = self.u64() if self.v >= 3 else self.u32()
+            if at == STRING:
+                for _ in range(n):
+                    self.fh.seek(self._len(), 1)
+            elif at in SCALAR:
+                self.fh.seek(struct.calcsize(SCALAR[at]) * n, 1)
+            else:
+                raise ValueError(f"unknown array elem type {at}")
+        elif t in SCALAR:
+            self.fh.seek(struct.calcsize(SCALAR[t]), 1)
+        else:
+            raise ValueError(f"unknown value type {t}")
+
+    def value(self, t: int, keep_arrays: bool = False):
+        if t == STRING:
+            return self.gstr()
+        if t == ARRAY:
+            at = self.u32()
+            n = self.u64() if self.v >= 3 else self.u32()
+            if not keep_arrays or n > 8:
+                # We only care about a few scalar arrays (e.g. rope dims).
+                if at == STRING:
+                    for _ in range(n):
+                        self.fh.seek(self._len(), 1)
+                elif at in SCALAR:
+                    self.fh.seek(struct.calcsize(SCALAR[at]) * n, 1)
+                else:
+                    raise ValueError(f"unknown array elem type {at}")
+                return f"<{n} x type{at}>"
+            return [self.value(at, False) for _ in range(n)]
+        if t in SCALAR:
+            return struct.unpack(SCALAR[t], self.fh.read(struct.calcsize(SCALAR[t])))[0]
+        raise ValueError(f"unknown value type {t}")
+
+
+def read_gguf(path: Path) -> dict:
+    with path.open("rb") as fh:
+        magic = struct.unpack("<I", fh.read(4))[0]
+        if magic != GGUF_MAGIC:
+            return {"error": f"bad magic {magic:#x}"}
+        version = struct.unpack("<I", fh.read(4))[0]
+        r = Reader(fh, version)
+        n_tensors, n_kv = r.u64(), r.u64()
+        meta: dict = {}
+        for _ in range(n_kv):
+            key = r.gstr()
+            vt = r.u32()
+            try:
+                meta[key] = r.value(vt)
+            except ValueError as exc:
+                meta[key] = f"<skip: {exc}>"
+                break
+    return {"version": version, "tensors": n_tensors, "kv": n_kv, "meta": meta}
+
+
+QUANT = {0: "F32", 1: "F16", 2: "Q4_0", 3: "Q4_1", 7: "Q8_0", 8: "Q5_0", 9: "Q5_1",
+         10: "Q2_K", 11: "Q3_K_S", 12: "Q3_K_M", 13: "Q3_K_L", 14: "Q4_K_S",
+         15: "Q4_K_M", 16: "Q5_K_S", 17: "Q5_K_M", 18: "Q6_K", 19: "IQ2_XXS"}
+
+
+def summarise(path: Path) -> dict:
+    info = read_gguf(path)
+    if "error" in info:
+        return {"file": path.name, "error": info["error"]}
+    m = info["meta"]
+    arch = m.get("general.architecture", "?")
+    name = m.get("general.name", "")
+    blob = f"{name} {arch}".lower()
+    is_mmproj = "clip" in arch or "projector" in blob or path.name.startswith("mmproj")
+    return {
+        "file": path.name,
+        "gb": round(path.stat().st_size / 1e9, 2),
+        "arch": arch,
+        "blocks": m.get(f"{arch}.block_count", "?"),
+        "ctx": m.get(f"{arch}.context_length", "?"),
+        "quant": QUANT.get(m.get("general.file_type"), m.get("general.file_type", "?")),
+        "name": name,
+        "mmproj": is_mmproj,
+        "kv": info["kv"],
+    }
+
+
+def main() -> int:
+    root = Path(r"C:\Users\lucar\.lmstudio\models")
+    rows = []
+    for p in sorted(root.rglob("*.gguf")):
+        try:
+            rows.append(summarise(p))
+        except Exception as exc:  # noqa: BLE001
+            rows.append({"file": p.name, "error": f"{type(exc).__name__}: {exc}"})
+    rows.sort(key=lambda r: (r.get("mmproj", False), r.get("gb", 0)))
+    for r in rows:
+        if "error" in r:
+            print(f"{r['file'][:46]:46} ERROR {r['error']}")
+            continue
+        tag = "MMPROJ" if r["mmproj"] else "MODEL "
+        print(f"{tag} {r['file'][:46]:46} {r['gb']:>5}GB {r['arch']:<12} "
+              f"L={str(r['blocks']):<4} ctx={str(r['ctx']):<7} {r['quant']:<7} {r['name'][:34]}")
+    print(f"\n{len(rows)} gguf files")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

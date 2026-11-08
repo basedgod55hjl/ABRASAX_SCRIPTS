@@ -1,0 +1,49 @@
+"""Size the known-big C: directories without walking everything.
+
+A full C:\\ walk stalls on WinSxS/System32 reparse points and takes >5 min while
+burning no CPU (it is blocked on I/O). Targeting the usual suspects answers the
+same question in seconds, and skipping reparse points avoids loops.
+"""
+from __future__ import annotations
+
+import os
+import shutil
+import time
+from pathlib import Path
+
+TARGETS = [
+    r"C:\Windows\WinSxS",
+    r"C:\Windows\Installer",
+    r"C:\Windows\System32",
+    r"C:\Program Files",
+    r"C:\Program Files (x86)",
+    r"C:\ProgramData",
+    r"C:\Users\sirch",
+    r"C:\ABRASAX",
+    r"C:\Users\sirch\AppData\Local",
+    r"C:\Users\sirch\AppData\Roaming",
+]
+
+
+def size(root: str) -> tuple[int, int]:
+    total = n = 0
+    for dp, dn, fns in os.walk(root, followlinks=False):
+        # skip junctions/reparse points to avoid double-counting and loops
+        dn[:] = [d for d in dn if not os.path.islink(os.path.join(dp, d))]
+        for fn in fns:
+            try:
+                total += os.lstat(os.path.join(dp, fn)).st_size
+                n += 1
+            except OSError:
+                pass
+    return total, n
+
+
+print(f"C: free {shutil.disk_usage('C:/').free/1e9:.1f} GB")
+print(f"{'GB':>8} {'files':>9}  path")
+for t in TARGETS:
+    if not os.path.isdir(t):
+        continue
+    t0 = time.time()
+    b, n = size(t)
+    print(f"{b/1e9:8.1f} {n:9d}  {t}   ({time.time()-t0:.0f}s)", flush=True)

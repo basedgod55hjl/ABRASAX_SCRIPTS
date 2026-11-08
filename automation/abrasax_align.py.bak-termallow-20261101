@@ -1,0 +1,270 @@
+#!/usr/bin/env python3
+"""ABRASAX ALIGN -- OSIRISBLXCK 2026-10-31.
+
+Single source of truth for "who owns which port / which file / which role".
+Detects collisions, duplicate writers, stale locks, and orphaned processes.
+Read-only by default; --fix reconciles (kills duplicates, keeps oldest).
+
+Run:  python SCRIPTS\\automation\\abrasax_align.py [--fix] [--json]
+"""
+import json
+import os
+import subprocess
+import sys
+from collections import defaultdict
+
+ROOT = os.environ.get("ABRASAX_ROOT", r"C:\abrasax")
+
+# --- CANONICAL PORT MAP: port -> (service, owner-script) -------------------
+# One port, one owner. Anything else listening is a duplicate.
+PORTS = {
+    1234: ("lmstudio", "LM Studio server"),
+    7798: ("jev-server", r"C:\abrasax\tools\jev_server.py"),
+    7799: ("term-server", r"tsx src\\server.ts"),
+    7801: ("jev-fused", r"C:\abrasax\tools\jev_server_fused.py"),
+    8090: ("abrasax-ui", "http.server UI/abrasax-ui/web"),
+    8083: ("llamacpp-local", "llama-server.exe"),
+    9626: ("abrasax-brain", "abrasax.brain serve"),
+    9627: ("floating-brain", "imgui_overlay.py"),
+}
+
+# --- ROLES: single-instance enforced roles -> matching cmdline substring --
+ROLES = {
+    "orchestrator": "orchestrator.py",
+    "host": r"abrasax\host.py",
+    # absolute "abrasax\tools\jev_server.py" could never match
+    #   "<venv>\python.exe" tools\jev_server.py
+    "jev-server": r"tools\jev_server.py",
+    "jev-fused": r"tools\jev_server_fused.py",
+    "buildloop": "abrasax buildloop",
+    "brain-serve": "abrasax.brain serve",
+    "overlay": "imgui_overlay.py",
+    "ui-http": "http.server 8090",
+    "reindex": "reindex_drive_inventory.py",
+    # 2026-10-31: three idle term.mjs instances were found holding no ports
+    # while the real :7799 service is `tsx src/server.ts` (different script).
+    "term-mjs": "term.mjs",
+    "term-server": r"src\server.ts",
+}
+
+
+def ps_json(cmd):
+    p = subprocess.run(
+        ["powershell", "-NoProfile", "-Command", cmd],
+        capture_output=True,
+        text=True,
+    )
+    try:
+        return json.loads(p.stdout) if p.stdout.strip() else []
+    except Exception:
+        return []
+
+
+def get_procs():
+    """Fast process enumeration. Uses tasklist for the PID set (cheap), then
+    reads command lines only for python/node via a single bounded PowerShell
+    with a hard timeout, so we never hang under heavy load."""
+    pids = set()
+    try:
+        out = subprocess.run(
+            ["tasklist", "/FI", "IMAGENAME eq python.exe", "/FO", "CSV", "/NH"],
+            capture_output=True, text=True, timeout=20).stdout
+        for line in out.splitlines():
+            parts = [x.strip('"') for x in line.split('","')]
+            if len(parts) > 1 and parts[1].isdigit():
+                pids.add(int(parts[1]))
+    except Exception:
+        pass
+    for exe in ("node.exe", "llama-server.exe"):
+        try:
+            out = subprocess.run(
+                ["tasklist", "/FI", f"IMAGENAME eq {exe}", "/FO", "CSV", "/NH"],
+                capture_output=True, text=True, timeout=20).stdout
+            for line in out.splitlines():
+                parts = [x.strip('"') for x in line.split('","')]
+                if len(parts) > 1 and parts[1].isdigit():
+                    pids.add(int(parts[1]))
+        except Exception:
+            pass
+
+    if not pids:
+        return []
+
+    # one bounded CIM query, hard timeout
+    idfilter = ",".join(str(x) for x in sorted(pids))
+    cmd = (
+        "Get-CimInstance Win32_Process | Where-Object { "
+        f"@({idfilter}) -contains $_.ProcessId }} | "
+        "Select-Object ProcessId,ParentProcessId,Name,CommandLine,CreationDate | "
+        "ConvertTo-Json -Compress"
+    )
+    try:
+        res = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd],
+            capture_output=True, text=True, timeout=60)
+        data = json.loads(res.stdout) if res.stdout.strip() else []
+        if isinstance(data, dict):
+            data = [data]
+        return data
+    except Exception:
+        # graceful degradation: report pids with unknown cmdline
+        return [{"ProcessId": x, "ParentProcessId": 0, "Name": "?",
+                 "CommandLine": "", "CreationDate": ""} for x in sorted(pids)]
+
+
+def get_listeners():
+    raw = ps_json(
+        "Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | "
+        "Select-Object LocalAddress,LocalPort,OwningProcess | ConvertTo-Json -Compress"
+    )
+    if isinstance(raw, dict):
+        raw = [raw]
+    return raw
+
+
+def _cmd_tail(cmdline: str) -> str:
+    """Everything after the executable token, normalized for comparison."""
+    parts = (cmdline or "").replace("/", "\\").split()
+    return " ".join(parts[1:]).strip().lower()
+
+
+def _collapse_shim_pairs(procs):
+    """Drop re-exec shim parents; keep the real worker child.
+
+    pythonw.exe in C:\\ABRASAX\\PYTHON\\.venv_gui re-execs itself with an identical
+    argument tail, so ONE role = parent+child. Counting both made
+    abrasax_align --fix kill the child: the role died and the "kept" pid was a
+    shim. Returns (kept_procs, collapsed_parent_pids).
+    """
+    by_pid = {p.get("ProcessId"): p for p in procs}
+    drop = set()
+    for p in procs:
+        tail = _cmd_tail(p.get("CommandLine"))
+        if not tail:
+            continue
+        q = by_pid.get(p.get("ParentProcessId"))
+        while q is not None:
+            if _cmd_tail(q.get("CommandLine")) == tail:
+                drop.add(q.get("ProcessId"))
+                break
+            q = by_pid.get(q.get("ParentProcessId"))
+    return [p for p in procs if p.get("ProcessId") not in drop], sorted(drop)
+
+
+def main():
+    fix = "--fix" in sys.argv
+    as_json = "--json" in sys.argv
+    procs, shim_pids = _collapse_shim_pairs(get_procs())
+    listeners = get_listeners()
+
+    findings = []
+    if shim_pids:
+        # Not a duplicate: one role, two pids (shim parent + worker child).
+        findings.append({"kind": "SHIM_PAIR_COLLAPSED", "pids": shim_pids})
+
+    # 1. Duplicate role instances
+    role_hits = defaultdict(list)
+    for p in procs:
+        # A wrapper that mentions the script is not the script: a PowerShell
+        # restarting the overlay quotes "imgui_overlay.py" in its own command
+        # line (measured 2026-11-01) and was counted as a second instance.
+        if str(p.get("Name") or "").strip().lower() in (
+                "powershell.exe", "pwsh.exe", "cmd.exe", "conhost.exe",
+                "bash.exe", "wmic.exe"):
+            continue
+        cl = (p.get("CommandLine") or "").replace("/", "\\")
+        for role, needle in ROLES.items():
+            if needle.lower() in cl.lower():
+                role_hits[role].append(p)
+
+    for role, hits in sorted(role_hits.items()):
+        if len(hits) > 1:
+            hits_sorted = sorted(hits, key=lambda x: str(x.get("CreationDate")))
+            keep = hits_sorted[0]
+            dupes = hits_sorted[1:]
+            findings.append(
+                {
+                    "kind": "DUPLICATE_ROLE",
+                    "role": role,
+                    "keep_pid": keep["ProcessId"],
+                    "kill_pids": [d["ProcessId"] for d in dupes],
+                }
+            )
+            if fix:
+                for d in dupes:
+                    subprocess.run(
+                        ["powershell", "-NoProfile", "-Command",
+                         f"Stop-Process -Id {d['ProcessId']} -Force -ErrorAction SilentlyContinue"],
+                        capture_output=True,
+                    )
+
+    # 2. Port listeners not matching canonical owner
+    seen_ports = defaultdict(list)
+    for l in listeners:
+        seen_ports[l.get("LocalPort")].append(l)
+    for port, ls in sorted(seen_ports.items(), key=lambda kv: str(kv[0])):
+        uniq_pids = sorted({x.get('OwningProcess') for x in ls})
+        if len(uniq_pids) > 1:
+            findings.append(
+                {
+                    "kind": "PORT_MULTI_BIND",
+                    "port": port,
+                    "pids": uniq_pids,
+                }
+            )
+
+    # 3. Stale singleton locks
+    lock_dir = os.path.join(ROOT, "LOGS", "locks")
+    if os.path.isdir(lock_dir):
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        try:
+            from abrasax_singleton import status as lock_status
+
+            for role, st in lock_status().items():
+                if not st["alive"]:
+                    findings.append(
+                        {
+                            "kind": "STALE_LOCK",
+                            "role": role,
+                            "pid": (st["lock"] or {}).get("pid"),
+                        }
+                    )
+        except Exception as e:
+            findings.append({"kind": "LOCK_CHECK_ERROR", "error": str(e)})
+
+    # 4. Concurrent heavy crawls (drive thrash)
+    crawlers = []
+    for p in procs:
+        cl = (p.get("CommandLine") or "").lower()
+        if "crawl_drives" in cl or "reindex_drive_inventory" in cl:
+            crawlers.append(p["ProcessId"])
+    if len(crawlers) > 1:
+        findings.append({"kind": "CONCURRENT_CRAWL", "pids": crawlers})
+
+    if as_json:
+        print(json.dumps(
+            {"findings": findings, "roles": {k: [p["ProcessId"] for p in v]
+                                             for k, v in role_hits.items()}},
+            indent=2))
+        return 1 if findings else 0
+
+    print("=" * 70)
+    print("ABRASAX ALIGN  root=%s  mode=%s" % (ROOT, "FIX" if fix else "AUDIT"))
+    print("=" * 70)
+    print("\nROLE INSTANCES (should be exactly 1 each):")
+    for role, needle in sorted(ROLES.items()):
+        hits = role_hits.get(role, [])
+        mark = "OK " if len(hits) == 1 else ("-- " if not hits else "!! ")
+        pids = ",".join(str(h["ProcessId"]) for h in hits) or "-"
+        print(f"  {mark}{role:16s} {len(hits)}  [{pids}]")
+
+    print("\nFINDINGS:")
+    if not findings:
+        print("  none -- all aligned")
+    for f in findings:
+        print("  !", json.dumps(f))
+    return 1 if findings else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

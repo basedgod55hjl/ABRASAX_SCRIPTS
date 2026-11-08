@@ -1,0 +1,123 @@
+# start_abrasax_stack.ps1 — bring the whole ABRASAX runtime up, idempotently.
+#
+# Safe to run at logon, after a crash, or by hand: every component is checked before it is
+# started, so it never creates a second supervisor / build loop / ops monitor / HUD.
+#
+#   powershell -NoProfile -ExecutionPolicy Bypass -File C:\ABRASAX\SCRIPTS\launchers\start_abrasax_stack.ps1
+#   ... -NoModels    skip the lms model check (faster, when LM Studio is not wanted)
+#   ... -Quiet       log only
+
+param([switch]$NoModels, [switch]$Quiet)
+$ErrorActionPreference = 'Continue'
+
+$root  = 'C:\ABRASAX'
+$py    = Join-Path $root 'PYTHON\.venv_gui\Scripts\pythonw.exe'
+$pyc   = Join-Path $root 'PYTHON\.venv_gui\Scripts\python.exe'
+$log   = Join-Path $root 'LOGS\stack-start.log'
+New-Item -ItemType Directory -Force -Path (Split-Path $log) | Out-Null
+
+function Log([string]$m) {
+    $line = '{0} {1}' -f (Get-Date -Format o), $m
+    Add-Content -Path $log -Value $line -Encoding UTF8
+    if (-not $Quiet) { Write-Output $line }
+}
+
+function Read-EnvFile([string]$path) {
+    $h = @{}
+    if (Test-Path $path) {
+        foreach ($l in Get-Content $path -ErrorAction SilentlyContinue) {
+            if ($l -match '^\s*([A-Za-z0-9_]+)\s*=\s*(.*?)\s*$') { $h[$Matches[1]] = $Matches[2].Trim('"').Trim("'") }
+        }
+    }
+    return $h
+}
+
+function PidRunning([string]$pidfile) {
+    if (-not (Test-Path $pidfile)) { return $false }
+    $v = (Get-Content $pidfile -ErrorAction SilentlyContinue | Select-Object -First 1)
+    if (-not $v) { return $false }
+    return [bool](Get-Process -Id ([int]$v) -ErrorAction SilentlyContinue)
+}
+
+function Start-Hidden([string]$exe, [string[]]$argv, [string]$cwd) {
+    Start-Process -FilePath $exe -ArgumentList $argv -WorkingDirectory $cwd -WindowStyle Hidden
+}
+
+Log '=== stack start ==='
+
+# ---- 1. credentials: .env is the source of truth, process env gets the same values ----
+$envMap = Read-EnvFile (Join-Path $root '.env')
+# ABRASAX_GATEWAY_TOKEN is in this list because the gateway fails closed: a non-loopback
+# bind without bearer auth calls SystemExit, so a LAN bind needs the token in the env of
+# the supervisor (and therefore of every child it starts).
+foreach ($k in @('LM_STUDIO_API_KEY','LM_API_KEY','NVIDIA_API_KEY_1','NVIDIA_API_KEY_2','JEV_API_KEY','JEV_BASE_URL','XPL_API_KEY','ABRASAX_GATEWAY_TOKEN')) {
+    if ($envMap.ContainsKey($k) -and $envMap[$k]) { Set-Item -Path "Env:$k" -Value $envMap[$k] }
+}
+$lmKey = $env:LM_STUDIO_API_KEY; if (-not $lmKey) { $lmKey = $env:LM_API_KEY }
+Log ("lm auth token: " + $(if ($lmKey) { 'present (' + $lmKey.Substring(0, [Math]::Min(10, $lmKey.Length)) + '...)' } else { 'MISSING' }))
+Log ("nvidia keys: " + [bool]$env:NVIDIA_API_KEY_1 + '/' + [bool]$env:NVIDIA_API_KEY_2 + "  jev key: " + [bool]$env:JEV_API_KEY)
+
+# ---- 2. LM Studio: require exactly the three resident models ----
+if (-not $NoModels) {
+    $lms = Join-Path $env:USERPROFILE '.lmstudio\bin\lms.exe'
+    if (Test-Path $lms) {
+        # ---- model autoload (patched: requirements checked against `lms ls`) ----
+        $want = @('gemma-4-e2b-uncensored-hauhaucs-aggressive', 'text-embedding-nomic-embed-text-v1.5')
+        if ($env:ABRASAX_REQUIRED_MODELS) {
+            $want = $env:ABRASAX_REQUIRED_MODELS -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+        }
+        $psOut = ''
+        try { $psOut = (& $lms ps 2>$null | Out-String) } catch { Log "lms ps failed: $($_.Exception.Message)" }
+        $lsOut = ''
+        try { $lsOut = (& $lms ls 2>$null | Out-String) } catch { Log "lms ls failed: $($_.Exception.Message)" }
+        foreach ($m in $want) {
+            if ($psOut -match [regex]::Escape($m)) { Log "model resident: $m"; continue }
+            if ($lsOut -and -not ($lsOut -match [regex]::Escape($m))) { Log "model not installed, skipped: $m"; continue }
+            Log "loading model: $m"
+            try { (& $lms load $m --gpu max -y 2>&1 | ForEach-Object { Log "  lms: $_" }) } catch { Log "  load failed: $($_.Exception.Message)" }
+        }
+        # ---- end model autoload ----
+    } else { Log "lms CLI not found (LM Studio not installed?)" }
+}
+
+# ---- 3. control plane (pid-file guarded) ----
+if (-not (PidRunning (Join-Path $root 'LOGS\supervisor.pid'))) {
+    Log 'starting supervisor'
+    Start-Hidden $py @((Join-Path $root 'SCRIPTS\automation\supervisor.py'), '--interval', '30') $root
+    Start-Sleep -Seconds 3
+} else { Log 'supervisor already running' }
+
+if (-not (PidRunning (Join-Path $root 'LOGS\build_loop.pid'))) {
+    Log 'starting build loop'
+    Start-Hidden $py @('-m', 'abrasax', 'buildloop', '--interval', '60', '--warm', '--quiet') $root
+} else { Log 'build loop already running' }
+
+if (-not (PidRunning (Join-Path $root 'LOGS\ops_monitor.pid'))) {
+    Log 'starting ops monitor'
+    Start-Hidden $py @((Join-Path $root 'SCRIPTS\automation\ops_monitor.py'), '--interval', '30', '--quiet') $root
+} else { Log 'ops monitor already running' }
+
+# ---- 4. HUD (no pid file: identify by window title) ----
+$hud = Get-Process python,pythonw -ErrorAction SilentlyContinue |
+    Where-Object { $_.MainWindowTitle -eq 'ABRASAX HUD' } | Select-Object -First 1
+if (-not $hud) {
+    Log 'starting HUD'
+    Start-Hidden $py @((Join-Path $root 'SCRIPTS\ui\abrasax_hud.py')) $root
+} else { Log "HUD already running (pid $($hud.Id))" }
+
+# ---- 5. report ----
+Start-Sleep -Seconds 4
+try {
+    $svc = & $pyc -m abrasax services 2>&1 | Out-String
+    Log '--- services ---'
+    foreach ($line in ($svc -split "`r?`n" | Where-Object { $_ -match 'UP|down|SERVICE' })) { Log $line }
+} catch { Log "services probe failed: $($_.Exception.Message)" }
+
+foreach ($port in 9001, 9626, 8090) {
+    $path = if ($port -eq 8090) { '/' } else { '/health' }
+    try {
+        $r = Invoke-WebRequest -Uri ("http://127.0.0.1:{0}{1}" -f $port, $path) -TimeoutSec 4 -UseBasicParsing
+        Log ("port {0}{1}: HTTP {2}" -f $port, $path, $r.StatusCode)
+    } catch { Log ("port {0}{1}: unreachable ({2})" -f $port, $path, $_.Exception.Message) }
+}
+Log '=== stack ready ==='

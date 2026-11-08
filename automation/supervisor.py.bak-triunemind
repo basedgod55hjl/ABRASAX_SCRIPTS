@@ -1,0 +1,929 @@
+"""ABRASAX supervisor — 30s automation loop.
+
+Every tick:
+  1. probe every service in abrasax.services (parallel TCP, 0.6s)
+  2. auto-start any down service on the AUTOSTART allowlist (cooldown 180s)
+  3. integrity-check the root tree (expected dirs / key files)
+  4. append a ledger event + rewrite state + heartbeat
+
+Usage:
+    python supervisor.py                # resident, 30s ticks
+    python supervisor.py --once        # single tick (debug)
+    python supervisor.py --dry-run     # probe + integrity only, never start
+    python supervisor.py --interval 30 # custom tick seconds
+
+The resident run is idempotent: a PID lock in LOGS/supervisor.pid keeps a
+second instance from starting (safe to relaunch from the watchdog task).
+"""
+from __future__ import annotations
+
+import argparse
+import ctypes
+import datetime as dt
+import json
+import os
+import shutil
+import socket
+import subprocess
+import threading
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(os.environ.get("ABRASAX_ROOT") or Path(__file__).resolve().parents[2])
+_IMG_ROOT = Path(os.environ.get("ABRASAX_IMG_ROOT") or (ROOT / "TOOLS" / "AI-ImageGen"))
+_IMG_PY = _IMG_ROOT / "Data" / "Packages" / "ComfyUI" / "venv" / "Scripts" / "python.exe"
+_LLAMA_HOME = ROOT / "BUILD" / "llamacpp" / "build" / "bin"
+_LLAMA = _LLAMA_HOME / "llama-server.exe"
+# Was hard-coded to C:\Users\sirch\... - there is no `sirch` user on this host
+# (verified 2026-11-01: `if exist C:\Users\sirch` -> NO SIRCH USER). The service
+# therefore launched a model path that could never exist and flapped on the 180 s
+# cooldown. Resolve per-user, and let an explicit override win.
+def _llama_model() -> Path:
+    override = os.environ.get("ABRASAX_LLAMA_MODEL")
+    if override:
+        return Path(override)
+    candidates = [
+        Path.home() / ".lmstudio" / "models" / "lmstudio-community"
+        / "LFM2.5-1.2B-Instruct-GGUF" / "LFM2.5-1.2B-Instruct-Q6_K.gguf",
+        ROOT / "MODELS" / "gguf" / "LFM2.5-1.2B-Instruct-Q6_K.gguf",
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    return candidates[0]
+
+
+_LLAMA_MODEL = _llama_model()
+# LM Studio ships its own CLI; `lms server start` is the only supported way to
+# bring its OpenAI server up without a desktop session.
+_LMS = Path.home() / ".lmstudio" / "bin" / "lms.exe"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from abrasax import services  # noqa: E402
+from abrasax.fs_atomic import append_line, write_text_atomic  # noqa: E402
+
+LOGS = ROOT / "LOGS"
+LEDGER = LOGS / "supervisor-ledger.jsonl"
+STATE = LOGS / "supervisor-state.json"
+HEARTBEAT = LOGS / "supervisor-heartbeat.txt"
+PIDFILE = LOGS / "supervisor.pid"
+
+EXPECTED_DIRS = [
+    "AGENTS", "APPS", "ARCHIVE", "CONFIG", "CORE", "DATA", "DOC", "ENGINE",
+    "GATEWAY", "LOGS", "MCP", "MODELS", "PROJECTS", "PYTHON", "RUST",
+    "SCRIPTS", "SEEDS", "SOURCE", "SYSTEMS", "TESTS", "TOOLS", "TYPESCRIPT",
+    "UI", "VENDORS", "_VAULT",
+]
+EXPECTED_FILES = [
+    ".env", "pyproject.toml", "abrasax/__init__.py", "abrasax/gateway.py",
+    "AGENTS/ROLES/registry.json", "CONFIG/llm/providers.json",
+    "ENGINE/abrasax_engine/__init__.py",
+]
+
+_SUB = ROOT / "TOOLS" / "source-tools" / "subsystems"
+_NODE = shutil.which("node") or "node"
+_DOTNET = shutil.which("dotnet") or "dotnet"
+
+
+def _codec_cmd() -> list[str]:
+    """Run the built DLL through the dotnet host.
+
+    The native apphost (codec_gateway.exe) inherits the Low mandatory integrity label of
+    TOOLS/source-tools, so HTTP.sys rejects its HttpListener session (error 6). `dotnet <dll>`
+    runs from the user profile and binds fine. Prefer Release, then Debug, then apphost.
+    """
+    for cfg in ("Release", "Debug"):
+        for dll in (_SUB / "codec_gateway" / "bin" / cfg).glob("*/codec_gateway.dll"):
+            return [_DOTNET, str(dll)]
+    for exe in (_SUB / "codec_gateway" / "bin").glob("**/codec_gateway.exe"):
+        return [str(exe)]
+    return [_DOTNET, "run", "--no-build"]
+
+
+_FB_BIN = ROOT / "ENGINE" / "floating_brain" / "cuda" / "bin"
+
+AUTOSTART: dict[str, dict] = {
+    "lmstudio": {
+        # Catalogued with entry/launch = None ("external desktop app"), so the
+        # supervisor could not restart it. Measured 2026-11-01T18:47Z: its
+        # server died, :1234 refused, ops-state read "down:lmstudio", and the
+        # only evidence was a FAIL from the verifier. `lms server start` is
+        # idempotent; the bind on :1234 is what proves it worked.
+        # Not `lms server start` directly: stopping the server deletes
+        # ~/.lmstudio/.internal/temp and the next load fails with ENOENT
+        # (measured twice, 2026-11-01T18:57Z), so the wrapper recreates it and
+        # waits for /v1/models before this process exits 0.
+        "cmd": [sys.executable, str(ROOT / "tools" / "lmstudio_start.py")],
+        "cwd": ROOT,
+        "requires": [str(_LMS)],
+        "required_bind": 1234,
+        # lms server start needs 3-6 s to open :1234 (measured 17:54:19Z: a
+        # 3.0 s grace reported "never bound" one second early).
+        "bind_grace_s": 15,
+    },
+    "floating-brain": {
+        # The GPU renderer that the ImGui overlay and the Unity client consume.
+        # Measured 2026-10-18: it died during a test run and nothing noticed,
+        # because it was in neither SERVICES nor AUTOSTART. Port bind is the
+        # mutex, so no pid file is needed.
+        "cmd": [str(_FB_BIN / "fb_server.exe"), "9700", "fb_kernels.cubin",
+                "index.html"],
+        "cwd": _FB_BIN,
+        # :9700 is the only evidence this process did anything. It exits
+        # immediately on this host, so without this the tick restarts it
+        # every cooldown and reports a started service that never ran.
+        "required_bind": 9700,
+    },
+    "agent-core": {
+        # The Hermes agent core (IPC bus on :4200). It existed as source + dist with a
+        # green self-test but no process: neither this table nor SERVICES named it, so
+        # nothing ever started it. The bind on :4200 is the proof it is really serving.
+        "cmd": [_NODE, "dist/index.js"],
+        "cwd": ROOT / "AGENTS" / "agent-system" / "agent-core",
+        "requires": [str(ROOT / "AGENTS" / "agent-system" / "agent-core" / "dist" / "index.js")],
+        "required_bind": 4200,
+        "bind_grace_s": 20,
+    },
+    "abrasax-gateway": {
+        "cmd": [sys.executable, "-m", "abrasax", "gateway", "--port", "9001"],
+        "cwd": ROOT,
+    },
+    "node-lm": {
+        "cmd": [_NODE, "server.mjs"],
+        "cwd": _SUB / "node_lm_server",
+    },
+    "filetool": {
+        "cmd": [sys.executable, "filetool.py"],
+        "cwd": _SUB / "filetool",
+    },
+    "abrasax-brain": {
+        "cmd": [sys.executable, "-m", "abrasax.brain", "serve", "--port", "9626"],
+        "cwd": ROOT,
+    },
+    "jev-brain-bridge": {
+        # Feeds LOGS/brain_state.json for the overlay. No socket to probe, so
+        # liveness is judged by the "heartbeat" field it writes each cycle.
+        "cmd": [sys.executable, "-u", "C:/abrasax/tools/brain_state_writer.py"],  # the ONE writer
+        "cwd": ROOT,  # writer resolves absolute paths
+    },
+    "floating-brain-overlay": {
+        # The HUD itself. It exposes /health on 9627 precisely so this watchdog
+        # can see it: measured 2026-10-18 it was dying with nobody noticing
+        # because supervisor.tick() skips any service without a port.
+        "cmd": [sys.executable, "ENGINE/floating_brain/imgui_overlay.py",
+                "--width", "760", "--height", "760", "--topmost",
+                "--borderless"],
+        "cwd": ROOT,
+    },
+    "abrasax-ui": {
+        "cmd": [sys.executable, "-m", "http.server", "8090", "--bind", "127.0.0.1"],
+        "cwd": ROOT / "UI" / "abrasax-ui" / "web",
+    },
+    "cellbrain": {
+        "cmd": [sys.executable, "abraxas_cellbrain.py", "--serve", "--port", "9624",
+                "--autoloop", "5", "--reciprocal"],
+        "cwd": _SUB / ".." / "brains",
+    },
+    "synaptic-brain": {
+        "cmd": [sys.executable, "abraxas_synaptic_server.py", "--serve", "--port", "9625",
+                "--autoloop", "5", "--resume"],
+        "cwd": _SUB / ".." / "brains",
+    },
+    "routerfail": {
+        "cmd": [sys.executable, "routerfail.py"],
+        "cwd": _SUB / "routerfail",
+    },
+    # Two ports on the canonical map (abrasax_align.py:22,24) and asserted by
+    # tools/selftest_all.py, which had no owner: a cold boot left both closed and
+    # the overlay/brain.html fell back to file:// and a dead feed. Plain python
+    # servers, no prerequisites, so they are safe to autostart.
+    "jev-server": {
+        "cmd": [sys.executable, str(ROOT / "tools" / "jev_server.py")],
+        "cwd": ROOT,
+        "required_bind": 7798,
+    },
+    "jev-fused": {
+        "cmd": [sys.executable, str(ROOT / "tools" / "jev_server_fused.py")],
+        "cwd": ROOT,
+        "required_bind": 7801,
+    },
+    # llamacpp-local is the embedder behind ABRASAX_EMBED_URL (:8083).
+    # It was removed from AUTOSTART on 2026-10-31 because it held ~1435 MiB
+    # and starved the pinned LM Studio model (needs ~4608 MiB) into HTTP 400.
+    # The real condition was ordering, not existence: with LM Studio already
+    # serving, 3197 MiB were free and the server came up in 2 s (2026-11-01).
+    # requires_port encodes that ordering so it cannot be raced, and
+    # required_bind proves it took :8083 rather than merely being spawned.
+    "llamacpp-local": {
+        "cmd": [sys.executable, str(ROOT / "tools" / "llamacpp_serve.py"), "--start"],
+        "cwd": ROOT,
+        "requires": [str(ROOT / "tools" / "llamacpp_serve.py")],
+        "requires_port": 1234,
+        "required_bind": 8083,
+        "bind_grace_s": 90,
+    },
+    "imagegen": {
+        "cmd": [_IMG_PY, str(_IMG_ROOT / "scripts" / "imagegen_server.py")],
+        "cwd": _IMG_ROOT,
+    },
+    "harvest-helper": {
+        "cmd": [_NODE, "server.js"],
+        "cwd": _SUB / "media-grabber" / "helper",
+    },
+    "codec-gateway": {
+        "cmd": _codec_cmd(),
+        "cwd": _SUB / "codec_gateway",
+    },
+}
+
+# --- single brain-state writer mutex -----------------------------------------
+# LOGS/brain_state.json has exactly one writer: tools/brain_state_writer.py.
+# tools/brain_state.py and ENGINE/floating_brain/jev_brain_state.py are retired
+# and emit different schemas (no heartbeat / no embed_ok), which made the
+# overlay's input go stale whenever one of them ran. Verified defect: three
+# writers, one file, and a fail in test_overlay_jev_wiring at age=71.3s.
+_RETIRED_WRITERS = ("tools/brain_state.py",
+                     "tools\\brain_state.py",
+                     "floating_brain/jev_brain_state.py",
+                     "floating_brain\\jev_brain_state.py")
+_CANONICAL_WRITER = "brain_state_writer.py"
+
+
+def _writer_procs() -> list[tuple[int, str]]:
+    """(pid, cmdline) for every python process running a brain-state writer."""
+    try:
+        import psutil
+    except Exception:            # noqa: BLE001 - keep the tick loop alive
+        return []
+    out = []
+    for p in psutil.process_iter(["pid", "cmdline", "exe"]):
+        cmd = " ".join(p.info["cmdline"] or [])
+        if not (_CANONICAL_WRITER in cmd or
+                any(w in cmd for w in _RETIRED_WRITERS)):
+            continue
+        try:
+            # three writers on this host are venv SHIMS that re-exec the real
+            # interpreter as a CHILD (pid A's cmdline is the writer; its child B's
+            # cmdline also names the writer but B does the work). Killing the
+            # parent leaves B orphaned and still writing. Keep the whole tree.
+            proc = psutil.Process(p.info["pid"])
+            kids = proc.children(recursive=True)
+        except Exception:        # noqa: BLE001
+            kids = []
+        out.append({"pid": p.info["pid"], "cmd": cmd,
+                    "kids": [(k.pid, " ".join(k.cmdline() or [])) for k in kids]})
+    return out
+
+
+def enforce_single_writer() -> dict:
+    """Kill retired writers, keep exactly one canonical writer alive."""
+    procs = _writer_procs()
+    killed = []
+    import psutil
+    for rec in procs:
+        if _CANONICAL_WRITER in rec["cmd"]:
+            continue
+        for kid_pid, _kid_cmd in rec["kids"]:
+            try:
+                psutil.Process(kid_pid).kill()
+                killed.append(kid_pid)
+            except Exception:    # noqa: BLE001
+                pass
+        try:
+            psutil.Process(rec["pid"]).kill()
+            killed.append(rec["pid"])
+        except Exception:        # noqa: BLE001
+            pass
+    alive = [p for p in procs
+             if _CANONICAL_WRITER in p["cmd"] and p["pid"] not in killed]
+    started = None
+    if not alive:
+        res = _start_service("brain_state_writer", {
+            "cmd": [sys.executable, "-u", str(ROOT / "tools" / _CANONICAL_WRITER)],
+            "cwd": ROOT,
+        })
+        started = res.get("pid") or res.get("error")
+    if killed or started:
+        _ledger({"event": "writer_mutex", "killed": killed, "started": started})
+    return {"killed": killed, "started": started, "alive": len(alive),
+            "retired_seen": [r["pid"] for r in procs
+                             if _CANONICAL_WRITER not in r["cmd"]]}
+
+COOLDOWN_S = 180
+# Last block reason per service: the ledger records state CHANGES. Measured
+# 2026-11-01, one absent install wrote six identical `blocked` lines in 3.5 min
+# because the blocked branch reset the cooldown on every tick.
+_last_block: dict[str, str] = {}
+
+
+def _record_block(sid: str, result: dict) -> bool:
+    """Log `blocked` only when the reason changes. True if this call logged it."""
+    reason = str(result.get("error") or result.get("kind") or "blocked")
+    if _last_block.get(sid) == reason:
+        return False
+    _last_block[sid] = reason
+    _ledger({"event": "blocked", "svc": sid, **result})
+    return True
+_last_start: dict[str, float] = {}
+
+
+def _now() -> str:
+    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+STILL_ACTIVE = 259
+
+
+def _pid_alive(pid: int) -> bool:
+    """True only for a process that is still running.
+
+    OpenProcess alone is not enough: a *terminated* process object stays
+    addressable while any handle to it exists, so OpenProcess succeeds for a pid
+    that `tasklist` and `Get-Process` no longer report. Measured 2026-11-01: pid
+    28456 was gone from both, yet OpenProcess returned a handle, the stale
+    LOGS/supervisor.pid was believed, and every restart printed
+    "supervisor already running (pid 28456); exiting". GetExitCodeProcess is the
+    test that separates the two: a live process reports STILL_ACTIVE (259), a
+    terminated one reports its exit code.
+    """
+    if pid <= 0:
+        return False
+    try:
+        k32 = ctypes.windll.kernel32
+        # 64-bit HANDLE, so the return type must be void_p (the ctypes default,
+        # c_int, truncates it); PROCESS_QUERY_LIMITED_INFORMATION works without
+        # elevation, which PROCESS_QUERY_INFORMATION does not.
+        k32.OpenProcess.restype = ctypes.c_void_p
+        k32.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+        k32.GetExitCodeProcess.argtypes = [ctypes.c_void_p,
+                                           ctypes.POINTER(ctypes.c_uint32)]
+        k32.CloseHandle.argtypes = [ctypes.c_void_p]
+        handle = k32.OpenProcess(0x1000, 0, pid)
+        if not handle:
+            return False
+        try:
+            code = ctypes.c_uint32()
+            if not k32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return False
+            return code.value == STILL_ACTIVE
+        finally:
+            k32.CloseHandle(handle)
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _rotate(path: Path, limit: int = 5 * 1024 * 1024) -> None:
+    try:
+        if path.exists() and path.stat().st_size > limit:
+            old = path.with_suffix(path.suffix + ".1")
+            if old.exists():
+                old.unlink()
+            path.rename(old)
+    except OSError:
+        pass
+
+
+def _ledger(event: dict) -> None:
+    try:
+        LOGS.mkdir(parents=True, exist_ok=True)
+        _rotate(LEDGER)
+        # durable append: a killed tick must not leave a NUL slot in the ledger
+        append_line(LEDGER, json.dumps({"ts": _now(), **event}, default=str) + "\n")
+    except OSError:
+        pass
+
+
+def _preflight(spec: dict) -> dict | None:
+    """Refuse to launch a service whose declared prerequisites are absent.
+
+    A missing binary or model used to be launched anyway, fail instantly, and
+    burn the whole 180 s cooldown on every tick - the "flapping" seen for
+    llamacpp-local on 2026-11-01. Returning a reason here makes that visible
+    instead of silent.
+    """
+    for req in spec.get("requires") or []:
+        if not Path(req).exists():
+            return {"error": f"missing prerequisite: {req}", "blocked": True}
+
+    # A prerequisite that is a *running service*, not a file. The embedder
+    # must not start before the model host it shares VRAM with (the 10-31
+    # starvation: 1435 MiB held while the pinned model needed 4608).
+    need_port = spec.get("requires_port")
+    if need_port is not None and not _port_open(int(need_port), 1.2):
+        return {"error": f"prerequisite port :{need_port} is not listening",
+                "blocked": True}
+
+    # A declared working directory that no longer exists fails inside Popen with
+    # NotADirectoryError, after the cooldown is already spent. Measured
+    # 2026-11-01: codec-gateway declared .../subsystems/codec_gateway, which is
+    # absent from the entire tree, and flapped every tick.
+    cwd = spec.get("cwd")
+    if cwd is not None and not Path(cwd).is_dir():
+        return {"error": f"missing working directory: {cwd}", "blocked": True}
+
+    cmd = spec.get("cmd") or []
+    head = str(cmd[0]).lower() if cmd else ""
+    # `dotnet run` needs a project to build. --no-build says "it is already
+    # built", so with no project file on disk the launch can only fail, and it
+    # fails slowly.
+    if head.endswith("dotnet") or head.endswith("dotnet.exe"):
+        args = [str(a).lower() for a in cmd[1:]]
+        if args[:1] == ["run"]:
+            has_project = any(
+                (Path(cwd or ".") / f).is_file()
+                for f in ("*.csproj", "*.fsproj")
+            )
+            if "--no-build" in args and not has_project:
+                return {"error": "dotnet run --no-build with no project on disk",
+                        "blocked": True}
+    # A required port is the only proof that a process did anything. Declared
+    # per service; the caller probes it. Reported here so the tick can block
+    # instead of restarting an instantaneous crash every 180 s.
+
+    # Existence is not enough. On 2026-11-01 BUILD/llamacpp/build/bin/llama-server.exe
+    # existed as a 10,752-byte stub whose import llama-server-impl.dll was absent from
+    # that directory; it died with 0xC0000135 (STATUS_DLL_NOT_FOUND) in ~40 ms, so the
+    # supervisor "started" it, saw it down next tick, and burned the 180 s cooldown for
+    # ever. A binary that cannot survive its own startup is a blocked prerequisite.
+    exe = spec.get("cmd") or []
+    if exe and str(exe[0]).lower().endswith(".exe"):
+        target = Path(exe[0])
+        if not target.exists():
+            # Report the flag that is actually wrong. imagegen's entry names
+            # Data/Packages/ComfyUI/venv/Scripts/python.exe, which does not exist
+            # on this machine; calling that "python.exe missing" is misleading.
+            return {"error": f"missing executable: {target}", "blocked": True}
+        why = _exe_unrunnable(target)
+        if why:
+            return {"error": f"unrunnable binary: {target.name} ({why})",
+                    "blocked": True}
+    return None
+
+
+def bind_never_opened(spec: dict, grace_s: float = 3.0) -> dict | None:
+    """After a launch, is the service's required port still closed?
+
+    fb_server.exe exits immediately on this host; the supervisor used to call
+    that "started" and then restart it every cooldown forever. A declared
+    required_bind turns that into one block.
+
+    A per-service ``bind_grace_s`` overrides the default. Measured
+    2026-11-01T17:54:19Z: `lms server start` needed 3-6 s to open :1234 and the
+    flat 3.0 s grace recorded "never bound :1234" one second before the port
+    answered HTTP 200.
+
+    The exe-probe cache is deliberately NOT written here. It used to be, with a
+    600 s TTL, so one slow boot made `_exe_unrunnable` call a healthy binary
+    broken for ten minutes and preflight refused to restart it.
+    """
+    port = spec.get("required_bind")
+    if port is None:
+        return None
+    try:
+        grace_s = float(spec.get("bind_grace_s") or grace_s)
+    except (TypeError, ValueError):
+        pass
+    deadline = time.time() + grace_s
+    while time.time() < deadline:
+        if _port_open(int(port), 0.4):
+            return None
+        time.sleep(0.25)
+    return {"error": f"never bound :{port} after {grace_s:.0f}s", "blocked": True}
+
+
+_EXE_PROBE_TTL_S = 600.0
+_exe_probe_cache: dict[str, tuple[float, str | None]] = {}
+
+
+def _exe_unrunnable(path: Path) -> str | None:
+    """Return a short reason if `path` cannot run, else None.
+
+    Probes once and caches for _EXE_PROBE_TTL_S: a Windows process that exits
+    non-zero within a couple of seconds, with no stdout, is treated as broken.
+    Only used for services that name a literal .exe.
+    """
+    import subprocess as _sp
+    key = str(path).lower()
+    now = time.time()
+    hit = _exe_probe_cache.get(key)
+    if hit and now - hit[0] < _EXE_PROBE_TTL_S:
+        return hit[1]
+    reason = None
+    try:
+        cp = _sp.run([str(path), "--version"], cwd=str(path.parent),
+                     capture_output=True, timeout=8)
+        # llama.cpp writes its banner to STDERR ("version: 0.7.0-dev"), so
+        # checking stdout alone reported a healthy binary as broken. Measured
+        # 2026-11-01: that false block kept :8083 disabled even though the
+        # service serves real completions at ~130 tok/s.
+        spoke = bool((cp.stdout or b"").strip() or (cp.stderr or b"").strip())
+        if cp.returncode != 0 and not spoke:
+            reason = "exit 0x%08X" % (cp.returncode & 0xFFFFFFFF)
+    except _sp.TimeoutExpired:
+        reason = None                      # slow but alive: not our call to block
+    except OSError as exc:
+        reason = exc.__class__.__name__
+    except Exception:
+        reason = None
+    _exe_probe_cache[key] = (now, reason)
+    return reason
+
+
+def _start_service(service_id: str, spec: dict) -> dict:
+    blocked = _preflight(spec)
+    if blocked:
+        return blocked
+    cwd = Path(spec["cwd"])
+    log_path = LOGS / f"svc-{service_id}.log"
+    try:
+        LOGS.mkdir(parents=True, exist_ok=True)
+        out = open(log_path, "ab")  # noqa: SIM115 - child keeps the handle
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | \
+            getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        proc = subprocess.Popen(
+            spec["cmd"], cwd=str(cwd), stdout=out, stderr=out,
+            stdin=subprocess.DEVNULL, creationflags=flags, close_fds=True,
+        )
+        return {"pid": proc.pid, "cmd": spec["cmd"], "cwd": str(cwd)}
+    except Exception as exc:  # noqa: BLE001
+        return {"error": repr(exc)}
+
+
+def integrity() -> dict:
+    missing_dirs = [d for d in EXPECTED_DIRS if not (ROOT / d).is_dir()]
+    missing_files = [f for f in EXPECTED_FILES if not (ROOT / f).exists()]
+    return {"missing_dirs": missing_dirs, "missing_files": missing_files,
+            "ok": not missing_dirs and not missing_files}
+
+
+def _port_open(port: int, timeout: float = 0.4) -> bool:
+    """True when something accepts TCP on the port.
+
+    The health probe is HTTP with a 0.6 s budget; a service that is listening but
+    slow to answer used to be classified 'down' and a second instance was spawned
+    after the cooldown (SO_REUSEADDR then allowed both to bind). This guard makes
+    'a listener exists' sufficient reason not to start another one.
+
+    Measured 2026-11-01: `socket.create_connection(..., timeout=1.2)` blocked the
+    supervisor loop indefinitely (main thread parked in socket.py:836 from here,
+    zero CPU, heartbeat frozen). The socket timeout does not reliably interrupt a
+    connect() on this host, so the call is driven on a daemon thread and given a
+    hard wall. A stuck connect can then only strand its own thread - which is
+    daemonised precisely so it can never keep the supervisor alive or block it.
+    """
+    deadline = float(timeout)
+    result = {"open": False}
+
+    def _connect() -> None:
+        s = None
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(deadline)
+            s.connect(("127.0.0.1", int(port)))
+            result["open"] = True
+        except OSError:
+            pass
+        finally:
+            if s is not None:
+                try:
+                    s.close()
+                except OSError:
+                    pass
+
+    t = threading.Thread(target=_connect, name=f"portprobe-{port}", daemon=True)
+    t.start()
+    # Small slack on top of the socket timeout; never return before the probe
+    # has had its full budget, never wait meaningfully longer than that.
+    t.join(deadline + 0.8)
+    return result["open"]
+
+
+def tick(interval: int, dry_run: bool = False, quiet: bool = False) -> dict:
+    # 0.6 s was measured as too tight on this host: with the GPU busy the brain and
+    # UI legitimately take several seconds to answer, the tick declared them down and
+    # started duplicates (21 brain listeners once). Two seconds still catches a real
+    # hang, and the 6 s retry below keeps a slow-but-alive service out of the restart path.
+    # the ONE writer of LOGS/brain_state.json: kill retired writers, restart
+    # the canonical one if dead. A writer problem must never kill the tick.
+    try:
+        _wm = enforce_single_writer()
+    except Exception:  # noqa: BLE001
+        _wm = None
+    rows = services.health(timeout=2.0)
+    ts = _now()
+    events: list[dict] = []
+    started: list[str] = []
+
+    for row in rows:
+        sid = row["id"]
+        if row.get("port") is None:
+            continue
+        if row.get("up"):
+            events.append({"svc": sid, "state": "up",
+                           "ms": row.get("latency_ms")})
+            continue
+        events.append({"svc": sid, "state": "down"})
+        if _port_open(row["port"], 1.2):
+            # listener exists, health endpoint was merely slow
+            events.append({"svc": sid, "state": "up", "note": "port-live"})
+            continue
+        # Second opinion with a generous budget: a busy service can miss the
+        # 0.6 s probe while still being alive. Observed 2026-10-24: abrasax-brain
+        # was restarted at 10:47 after one timed-out probe and both listeners
+        # then shared :9626 under SO_REUSEADDR.
+        try:
+            again = [r for r in services.health(timeout=6.0) if r.get("id") == sid]
+        except Exception:
+            again = []
+        if again and again[0].get("up"):
+            events.append({"svc": sid, "state": "up", "note": "slow-health"})
+            continue
+        spec = AUTOSTART.get(sid)
+        if not spec or dry_run:
+            continue
+        last = _last_start.get(sid, 0.0)
+        if time.time() - last < COOLDOWN_S:
+            continue
+        _last_start[sid] = time.time()
+        result = _start_service(sid, spec)
+        if result.get("blocked"):
+            # Keep the cooldown stamp: nothing was launched, but a service blocked
+            # by a missing install cannot become startable within one tick either.
+            # Popping it here re-ran the preflight and re-wrote the ledger on every
+            # tick (six identical lines in 3.5 min, measured 17:04:25-17:07:55).
+            _record_block(sid, result)
+            events.append({"svc": sid, "state": "blocked", **result})
+            continue
+        # The process is alive, but did it take the port it exists to own?
+        # Without this, fb_server.exe exiting instantly was logged as
+        # "started" every cooldown and never once bound :9700.
+        gate = bind_never_opened(spec)
+        if gate is not None:
+            # Same rule: a process that exits before binding is retried on the
+            # cooldown, and reported when the reason changes.
+            _record_block(sid, gate)
+            events.append({"svc": sid, "state": "blocked", **gate})
+            continue
+        _last_block.pop(sid, None)  # a real start clears the blocked memory
+        started.append(sid)
+        _ledger({"event": "start", "svc": sid, **result})
+        events.append({"svc": sid, "state": "started", **result})
+
+    chk = integrity()
+    if not chk["ok"]:
+        _ledger({"event": "missing", **chk})
+
+    # One service, one verdict. A tick can emit down-then-up for the same
+    # service (fast probe missed it, second opinion found it); keeping both
+    # entries made "up" and "down" disagree about the same host.
+    up_ids = {e["svc"] for e in events if e.get("state") == "up"}
+    down_ids = {e["svc"] for e in events if e.get("state") == "down"} - up_ids
+    # Local-first routing: the router may prefer local providers only while it
+    # knows they are up, and this tick owns that knowledge (it is the same
+    # verdict written to supervisor-state.json). Computed here, after up_ids and
+    # before summary - the first version ran before up_ids existed and every tick
+    # logged autonomy_error (measured 18:11:00Z).
+    try:
+        from abrasax import autonomy
+        if autonomy.heal_config():
+            _ledger({"event": "config_healed", "file": "CONFIG/llm/providers.json",
+                     "detail": "UTF-8 BOM stripped"})
+        _llm_mode = autonomy.snapshot(up_ids=up_ids, write_state=True)
+    except Exception as exc:  # noqa: BLE001 - routing policy must not kill a tick
+        _llm_mode = {"error": repr(exc)}
+        _ledger({"event": "autonomy_error", "error": repr(exc)})
+
+    summary = {
+        "ts": ts, "tick_interval_s": interval, "dry_run": dry_run,
+        "up": sorted(up_ids),
+        "down": sorted(down_ids),
+        "started": started, "integrity_ok": chk["ok"],
+        "llm_mode": (_llm_mode or {}).get("mode"),
+        "writer": _wm,
+        "missing_dirs": chk["missing_dirs"],
+        "missing_files": chk["missing_files"],
+    }
+    # Heartbeat FIRST. It is the only signal the external watchdogs read, so a
+    # stale heartbeat with a fresh state file reads as "supervisor is dead" and
+    # makes a second ticker start (measured 2026-11-01: two supervisors racing,
+    # duplicate start events for floating-brain and its overlay). Each write is
+    # guarded on its own and a failure is recorded, never swallowed.
+    hb = (f"{ts} pid={os.getpid()} up={len(summary['up'])} "
+          f"down={len(summary['down'])} "
+          f"started={len(started)} integrity_ok={chk['ok']}\n")
+    LOGS.mkdir(parents=True, exist_ok=True)
+    for _path, _body in ((HEARTBEAT, hb),
+                         (STATE, json.dumps(summary, indent=2))):
+        try:
+            # fsync before rename: a zero-filled heartbeat after a hang
+            # is what makes a second supervisor tick start.
+            write_text_atomic(_path, _body)
+        except OSError as _exc:
+            _ledger({"event": "write_error", "path": str(_path),
+                     "error": repr(_exc)})
+    _ledger({"event": "tick", "pid": os.getpid(), **summary})
+    if not quiet:
+        _say(f"[{ts}] up={len(summary['up'])} down={len(summary['down'])} "
+             f"started={started or '-'} integrity={'OK' if chk['ok'] else chk}")
+    return summary
+
+
+def _say(line: str) -> None:
+    """Print, or append to the console log, or do nothing. Never raise.
+
+    Measured 2026-11-01: a pythonw supervisor whose parent shell exited got
+    OSError(22) from print() on every tick, after the state files had already
+    been written -- 27 tick_error rows in 60 ledger lines while the stack looked
+    healthy. Output is a convenience; it must not be able to fail the tick.
+    """
+    try:
+        print(line, flush=True)
+        return
+    except (OSError, ValueError):
+        pass
+    try:
+        with open(LOGS / "supervisor-console.log", "a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+    except OSError:
+        pass
+
+
+def _proc_created_epoch(pid: int):
+    """UTC epoch seconds when `pid` started, or None if unreadable."""
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return None
+    if pid <= 0:
+        return None
+    try:
+        k32 = ctypes.windll.kernel32
+        k32.OpenProcess.restype = ctypes.c_void_p
+        k32.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+        k32.GetProcessTimes.argtypes = [ctypes.c_void_p,
+                                        ctypes.POINTER(ctypes.c_uint32 * 2),
+                                        ctypes.POINTER(ctypes.c_uint32 * 2),
+                                        ctypes.POINTER(ctypes.c_uint32 * 2),
+                                        ctypes.POINTER(ctypes.c_uint32 * 2)]
+        handle = k32.OpenProcess(0x1000, 0, pid)      # QUERY_LIMITED_INFORMATION
+        if not handle:
+            return None
+        try:
+            created = (ctypes.c_uint32 * 2)()
+            zero = (ctypes.c_uint32 * 2)()
+            if not k32.GetProcessTimes(ctypes.c_void_p(handle), created, zero,
+                                       zero, zero):
+                return None
+            ticks = (created[1] << 32) | created[0]
+            return ticks / 10_000_000.0 - 11644473600.0
+        finally:
+            k32.CloseHandle(ctypes.c_void_p(handle))
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _pidfile_owner() -> int:
+    """The pid in LOGS/supervisor.pid IF that pid is really the process that
+    wrote it. 0 means free / stale / recycled.
+
+    Windows recycles pids: measured 2026-11-01, a killed supervisor's pid came
+    back as chrome.exe and blocked every new supervisor with "already running".
+    A process created after the pidfile was written cannot have written it.
+    """
+    try:
+        pid = int(PIDFILE.read_text().strip())
+    except (OSError, ValueError):
+        return 0
+    if not pid or pid == os.getpid():
+        return pid
+    if not _pid_alive(pid):
+        return 0
+    try:
+        wrote_at = PIDFILE.stat().st_mtime
+    except OSError:
+        return 0
+    created = _proc_created_epoch(pid)
+    if created is not None and created > wrote_at + 2.0:
+        return 0          # pid was reused by a process younger than the file
+    return pid
+
+
+# The winner creates the file with O_CREAT|O_EXCL and writes its pid in a second
+# step. A loser arriving inside that window used to read an empty file, call it
+# stale, and unlink the winner's lock (measured 2026-11-01 under load: two
+# winners). An empty file younger than this is a winner mid-write, not a corpse.
+_CLAIM_GRACE_S = 2.0
+
+
+def _pidfile_body() -> str | None:
+    try:
+        return PIDFILE.read_text(encoding="utf-8", errors="replace").strip()
+    except OSError:
+        return None
+
+
+def _claim_pidfile(grace_s: float | None = None) -> bool:
+    """Atomically claim LOGS/supervisor.pid. True only for the one winner.
+
+    Check-then-write is not a lock: two supervisors started in the same second
+    both saw "no live owner" and both wrote the file (measured 2026-11-01), so
+    both ran the tick and started duplicate services. O_CREAT|O_EXCL is atomic
+    on Win32 and POSIX, so only one caller can create the file.
+
+    The second step (writing the pid) is NOT atomic with the create, so an empty
+    file is treated as "someone is writing", not as "stale", until the grace
+    expires. A non-empty body that names no live pid is stale immediately.
+    """
+    grace = _CLAIM_GRACE_S if grace_s is None else float(grace_s)
+    deadline = time.time() + grace + 3.0
+    while True:
+        try:
+            fd = os.open(PIDFILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            pid = _pidfile_owner()
+            if pid and pid != os.getpid():
+                return False              # a real, live supervisor owns it
+            body = _pidfile_body()
+            if body in (None, ""):
+                # Empty: either a winner mid-write (wait) or a leftover from a
+                # process that died between create and write (age decides).
+                try:
+                    age = time.time() - PIDFILE.stat().st_mtime
+                except OSError:
+                    return False
+                if age < grace and time.time() < deadline:
+                    time.sleep(0.02)
+                    continue
+            try:
+                PIDFILE.unlink()
+            except OSError:
+                return False
+            continue
+        except OSError:
+            return False
+        else:
+            try:
+                os.write(fd, str(os.getpid()).encode("ascii"))
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+            return True
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="supervisor")
+    ap.add_argument("--once", action="store_true")
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--interval", type=int, default=30)
+    ap.add_argument("--quiet", action="store_true")
+    args = ap.parse_args(argv)
+
+    LOGS.mkdir(parents=True, exist_ok=True)
+    owns_pidfile = True
+    if not args.once:
+        owns_pidfile = _claim_pidfile()
+        if not owns_pidfile:
+            print("supervisor already running; exiting")
+            return 0
+
+    try:
+        if args.once:
+            # --once intentionally skips the singleton (debug probe), but it must
+            # not START anything while a resident owns the pidfile: measured
+            # 2026-11-01, a debug --once and the resident both saw the same
+            # service down and each launched a copy of the GPU server 1 s apart.
+            # The resident starts anything down within 30 s, so probe-only is
+            # all a concurrent --once can usefully do.
+            dry = args.dry_run
+            if not dry:
+                _owner = _pidfile_owner()
+                if _owner and _owner != os.getpid():
+                    dry = True
+                    print(f"resident supervisor pid {_owner} owns the pidfile; "
+                          f"--once is probe-only (no starts)")
+            tick(args.interval, dry_run=dry, quiet=args.quiet)
+            return 0
+        while True:
+            try:
+                tick(args.interval, dry_run=args.dry_run, quiet=args.quiet)
+            except Exception as exc:  # noqa: BLE001 - loop must survive
+                # repr(OSError(22)) alone cannot be acted on: keep the stack.
+                import traceback as _tb
+                _ledger({"event": "tick_error", "error": repr(exc),
+                         "trace": _tb.format_exc()[-2500:]})
+            time.sleep(max(5, args.interval))
+    finally:
+        # Only the owner may remove the file: a loser that unlinked here would
+        # delete the live supervisor's pidfile and invite a third instance.
+        if not args.once and owns_pidfile:
+            try:
+                PIDFILE.unlink()
+            except OSError:
+                pass
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

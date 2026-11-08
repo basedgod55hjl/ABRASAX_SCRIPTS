@@ -1,4 +1,0 @@
-# VLC AI ENHANCEMENT PLAYLIST — 7D φ-Resonant Media
-new vlc broadcast enabled
-setup vlc input dummy://
-setup vlc output #duplicate{dst=display}

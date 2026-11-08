@@ -1,0 +1,44 @@
+"""Find where the baseUrl literal actually lives in the compiled assembly.
+
+Assembly-CSharp.dll is a *stub* assembly for the editor: Unity keeps a field
+initializer's literal in the per-type metadata, but .NET string literals are stored
+in the #US (user string) heap encoded as UTF-16LE, not ASCII. Searching for
+b"http://127.0.0.1:9700" therefore misses them.
+
+So the earlier FAIL may be a bug in my checker, not in the build. Verify by
+searching for the UTF-16 encoding before concluding anything.
+"""
+import sys
+
+DLL = r"C:\UnityProjects\ABRASAX-Brain\Library\ScriptAssemblies\Assembly-CSharp.dll"
+data = open(DLL, "rb").read()
+
+target = "http://127.0.0.1:9700"
+ascii_hit = target.encode("ascii") in data
+utf16_hit = target.encode("utf-16-le") in data
+
+print(f"file        : {DLL}")
+print(f"size        : {len(data):,}")
+print(f"ascii  hit  : {ascii_hit}")
+print(f"utf16  hit  : {utf16_hit}")
+
+# Also look for the shorter, unambiguous fragment.
+frag = "127.0.0.1:9700"
+print(f"\nfragment '{frag}'")
+print(f"  ascii : {frag.encode('ascii') in data}")
+print(f"  utf16 : {frag.encode('utf-16-le') in data}")
+
+# And confirm the class itself is present at all.
+print(f"\nclass  'FloatingBrainRenderer' ascii: "
+      f"{b'FloatingBrainRenderer' in data}")
+print(f"class  'FloatingBrainRenderer' utf16: "
+      f"{'FloatingBrainRenderer'.encode('utf-16-le') in data}")
+
+if utf16_hit:
+    idx = data.find(target.encode("utf-16-le"))
+    print(f"\nfirst utf16 occurrence at 0x{idx:X}")
+    print("  -> the literal IS compiled; my earlier ASCII search was wrong")
+
+print("\nRESULT:", "utf16 literal present" if utf16_hit else
+      "literal absent in both encodings -- investigate serializer")
+sys.exit(0 if utf16_hit else 1)

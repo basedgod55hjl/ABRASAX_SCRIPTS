@@ -1,0 +1,152 @@
+"""Parse dsp_ippv2's code signature SuperBlob -- does it actually cover the file?
+
+The decisive question the whole thread has circled:
+
+  §34 says "dsp_ippv2 is UNSIGNED".
+  The binary has LC_CODE_SIGNATURE -> dataoff=33,349,040, datasize=441,952.
+
+Both can be true at once:
+  * a SuperBlob (magic 0xFADE0CC0) is present             -> "has a signature"
+  * but its CodeDirectory slot is absent / its cdhash fails  -> "not validly signed"
+
+A SuperBlob is: magic, length, count, then `count` index entries of
+(type, offset). Parsing the index answers this in one shot:
+  * 0xFADE0C02 CodeDirectory   -> the actual hash table
+  * 0xFADE0C01 Requirements
+  * 0xFADE7171 Entitlements
+  * 0xFADE0B01 CMS blob (detached signature)
+
+If CodeDirectory is missing, or its hash doesn't match the file, the file was
+modified after signing -- which is exactly what "signed-then-modified" means and
+what a SHA-256 manifest failure would detect.
+"""
+from __future__ import annotations
+
+import hashlib
+import struct
+from pathlib import Path
+# DEAD PATH (sirch): original C:\Users\sirch\_WORK\fl_unpack dataset has no local equivalent on this host.
+
+P = Path(r"C:\abrasax\_DEAD_PATH\fl_unpack\Library\Audio\Plug-Ins\VST"
+         r"\FL Studio VSTi.vst\Contents\Resources\Shared\dsp_ippv2_x64.dylib")
+
+FAT_MAGIC = 0xCAFEBABE
+MH_MAGIC_64 = 0xFEEDFACF
+LC_CODE_SIGNATURE = 0x1D
+CSMAGIC_EMBEDDED_SIGNATURE = 0xFADE0CC0
+SLOT = {
+    0x00000: "CodeDirectory",
+    0x00001: "Info.plist",
+    0x00002: "Requirements",
+    0x00003: "ResourceDir",
+    0x00004: "Application",
+    0x00005: "Entitlements",
+    0x00008: "LaunchConstraint",
+    0x10000: "CMS (detached sig)",
+}
+HASHTYPE = {1: "SHA-1", 2: "SHA-256", 3: "SHA-256-truncated", 4: "SHA-384"}
+
+
+def fat_slices(fh):
+    if struct.unpack(">I", fh.read(4))[0] != FAT_MAGIC:
+        return []
+    n = struct.unpack(">I", fh.read(4))[0]
+    out = []
+    for _ in range(n):
+        ct, _s, off, size, _a = struct.unpack(">iiIII", fh.read(20))
+        out.append((ct, off, size))
+    return out
+
+
+def find_codesig(fh, off):
+    fh.seek(off)
+    hdr = fh.read(32)
+    if struct.unpack("<I", hdr[:4])[0] != MH_MAGIC_64:
+        return None
+    ncmds, sizeofcmds = struct.unpack("<II", hdr[16:24])
+    pos = off + 32
+    for _ in range(ncmds):
+        fh.seek(pos)
+        raw = fh.read(8)
+        if len(raw) < 8:
+            break
+        cmd, cmdsize = struct.unpack("<II", raw)
+        if cmd == LC_CODE_SIGNATURE and cmdsize >= 16:
+            fh.seek(pos + 8)
+            dataoff, datasize = struct.unpack("<II", fh.read(8))
+            return dataoff, datasize
+        pos += cmdsize
+    return None
+
+
+def main() -> int:
+    size = P.stat().st_size
+    whole = hashlib.sha256()
+    with P.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            whole.update(chunk)
+    print(f"file          : {P.name}  {size:,} B")
+    print(f"sha256(file)  : {whole.hexdigest()}")
+
+    with P.open("rb") as fh:
+        for ct, off, sz in fat_slices(fh):
+            arch = "x86_64" if ct == 0x01000007 else "arm64" if ct == 0x0100000C else hex(ct)
+            cs = find_codesig(fh, off)
+            print(f"\n--- slice {arch} @{off:#x} size={sz:,}")
+            if not cs:
+                print("    no LC_CODE_SIGNATURE (or slice unparseable)")
+                continue
+            dataoff, datasize = cs
+            print(f"    LC_CODE_SIGNATURE dataoff={dataoff:,} datasize={datasize:,}")
+            print(f"    ends at {dataoff + datasize:,} vs file {size:,} "
+                  f"-> {'exactly at EOF' if dataoff + datasize == size else 'does NOT reach EOF'}")
+
+            fh.seek(dataoff)
+            head = fh.read(12)
+            magic, length, count = struct.unpack(">III", head)
+            print(f"    SuperBlob magic={magic:#010x} "
+                  f"({'EMBEDDED_SIGNATURE' if magic == CSMAGIC_EMBEDDED_SIGNATURE else 'unknown'}) "
+                  f"length={length:,} count={count}")
+            if magic != CSMAGIC_EMBEDDED_SIGNATURE:
+                print("    => not a SuperBlob; signature slot empty or damaged")
+                continue
+            print(f"    {'blob type':24} {'magic':>12} {'offset':>10} {'length':>10}")
+            for i in range(count):
+                fh.seek(dataoff + 12 + i * 8)
+                btype, boff = struct.unpack(">II", fh.read(8))
+                fh.seek(dataoff + boff)
+                bmagic, blen = struct.unpack(">II", fh.read(8))
+                label = SLOT.get(btype, f"type {btype}")
+                print(f"    {label:24} {bmagic:#012x} {boff:>10,} {blen:>10,}")
+                if bmagic == 0xFADE0C02 and blen >= 44:
+                    fh.seek(dataoff + boff)
+                    cd = fh.read(min(blen, 128))
+                    version, _, hashOffset, identOffset, nSpecial, nCode, codeLimit = \
+                        struct.unpack(">IIIIIII", cd[8:36])
+                    hashSize, _ht, _plat, pageSize, spare2 = struct.unpack(">BBBBI", cd[36:44])
+                    print(f"      CodeDirectory v{version:#x} hashSize={hashSize} "
+                          f"hashType={_ht} pageSize=2^{pageSize} "
+                          f"nCodeSlots={nCode} codeLimit={codeLimit:,}")
+                    # first code slot lives at hashOffset in the blob
+                    if nCode:
+                        fh.seek(dataoff + boff + hashOffset)
+                        slot0 = fh.read(hashSize).hex()
+                        print(f"      first code slot ({HASHTYPE.get(_ht,'?')}): {slot0}")
+                        # recompute hash of the THIRD page (slot 2) to prove coverage
+                        page = 1 << pageSize if pageSize else 0
+                        if page and 2 * page + page <= size:
+                            fh.seek(2 * page)
+                            pg = fh.read(page)
+                            got = (hashlib.sha256(pg).hexdigest() if _ht == 2
+                                   else hashlib.sha1(pg).hexdigest() if _ht == 1
+                                   else hashlib.sha384(pg).hexdigest())
+                            fh.seek(dataoff + boff + hashOffset + 2 * hashSize)
+                            want = fh.read(hashSize).hex()
+                            print(f"      page 2 recomputed: {got[:hashSize*2]}")
+                            print(f"      page 2 in blob   : {want}")
+                            print(f"      MATCH: {got[:hashSize*2] == want}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

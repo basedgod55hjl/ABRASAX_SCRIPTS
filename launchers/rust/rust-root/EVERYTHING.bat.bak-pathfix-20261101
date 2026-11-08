@@ -1,0 +1,54 @@
+@echo off
+title OSIRISBLXCK — FULL SYSTEM
+cd /d C:\Users\sirch\Desktop\ABRASAX\repos\ABRASAX
+
+echo ╔══════════════════════════════════════════════════════════════╗
+echo ║     OSIRISBLXCK — FULL SYSTEM INTEGRATION                  ║
+echo ║     PRIMAL_HEX: 4f5349524953424c58434b                     ║
+echo ║     CREATOR: Sir Charles Spikes (sirch)                ║
+echo ╚══════════════════════════════════════════════════════════════╝
+echo.
+
+REM ── Step 1: Kill stale processes ──
+echo [1/6] Killing stale processes...
+taskkill /F /IM abrasax.exe >nul 2>&1
+taskkill /F /IM abrasaxd.exe >nul 2>&1
+taskkill /F /IM python.exe /FI "WINDOWTITLE eq bot*" >nul 2>&1
+ping -n 3 127.0.0.1 >nul
+
+REM ── Step 2: Set GPU persistent mode ──
+echo [2/6] Setting GPU persistent mode...
+nvidia-smi -pm 1 >nul 2>&1
+powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c >nul 2>&1
+
+REM ── Step 3: Launch Telegram bot ──
+echo [3/6] Starting Telegram bot v11...
+start /B python telegram\osirisblxck_ultimate_v11.py > data\logs\bot_v11.log 2>&1
+ping -n 4 127.0.0.1 >nul
+
+REM ── Step 4: Start Meta layer ──
+echo [4/6] Starting Meta layer...
+echo   Launching ABRASAX Meta Layer with gemma-4-e4b-uncensored-hauhaucs-aggressive
+start /B abrasax_rs\target\release\abrasax.exe meta > data\logs\meta.log 2>&1
+ping -n 6 127.0.0.1 >nul
+
+REM ── Step 5: Start daemon ──
+echo [5/6] Starting daemon...
+start /B abrasax_rs\target\release\abrasax.exe daemon > data\logs\daemon.log 2>&1
+
+REM ── Step 6: Status ──
+echo [6/6] All systems launched!
+echo.
+echo ╔══════════════════════════════════════════════════════════════╗
+echo ║  PROCESS            PID    STATUS                           ║
+echo ║  ─────────────────────────────────────────────              ║
+tasklist /FI "IMAGENAME eq abrasax.exe" 2>nul | findstr abrasax
+tasklist /FI "IMAGENAME eq abrasaxd.exe" 2>nul | findstr abrasaxd
+tasklist /FI "IMAGENAME eq python.exe" 2>nul | findstr /i "python"
+echo ║                                                             ║
+echo ║  Telegram: @botABRASAXbot                                   ║
+echo ║  Logs: data\logs\vram_meta.log                              ║
+echo ║  Telemetry: data\logs\meta_out.txt                          ║
+echo ╚══════════════════════════════════════════════════════════════╝
+echo.
+echo Use /stream in Telegram for live phi evolution updates.

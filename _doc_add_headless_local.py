@@ -1,0 +1,148 @@
+from pathlib import Path
+
+p = Path(r"C:\abrasax\DOC\RUN-STATE-20261101T1735Z.md")
+s = p.read_text(encoding="utf-8")
+assert "## 10. Headless" not in s
+
+s += """
+---
+
+## 10. Headless: no child may put a window on the desktop
+
+Operator command: "make commands head less no windows".
+
+Measured on the live stack (`SCRIPTS/_probe_visible_consoles.py`, which
+enumerates visible `ConsoleWindowClass` windows and maps each to its owning
+process):
+
+```
+visible console windows: 3
+  - 2 x "Administrator: Windows PowerShell"   the operator's own term.cmd
+  - 1 x llama-server.exe  pid 9028            the :8083 service THIS TREE started
+```
+
+`pythonw.exe` runs windowless, but a console-subsystem child spawned without
+`CREATE_NO_WINDOW` gets a brand new console. `tools/llamacpp_serve.py` spawned
+`llama-server.exe` with `CREATE_NEW_PROCESS_GROUP` only, and the same file ran
+`nvidia-smi`, `powershell` and `taskkill` raw.
+
+Fix: one helper, `abrasax/winproc.py` (`run`, `spawn`, `hidden_flags`,
+`detached_flags`), applied at every live spawn site:
+
+| site | before | after |
+|---|---|---|
+| `tools/llamacpp_serve.py` | `Popen(CREATE_NEW_PROCESS_GROUP)` | `winproc.spawn(detached=True)` |
+| `tools/llamacpp_serve.py` | `subprocess.run(nvidia-smi / powershell / taskkill)` | `winproc.run` |
+| `tools/lmstudio_start.py` | `subprocess.run(lms ...)` | `winproc.run` |
+| `abrasax/services.py` | `subprocess.run(powershell -File ...)` | `winproc.run` + `-WindowStyle Hidden` |
+| supervisor / ops monitor | already `CREATE_NO_WINDOW` / `DETACHED_PROCESS` | unchanged |
+
+Proof after restarting the :8083 service through the fixed tool:
+
+```
+visible console windows: 2      (both the operator's own term.cmd)
+```
+
+Tests: `tests/test_headless_spawns.py` - 8 pass, including "no raw
+`subprocess.Popen`/`run` left in the two local-server tools", "the llama.cpp
+child is spawned detached", and "the launcher call is hidden".
+
+### Correction recorded
+
+`SCRIPTS/_probe_headless_spawn.py` first tried to prove the flag by counting
+consoles desktop-wide. Two runs disagreed with each other (other processes open
+and close consoles while it runs), and the child-side check read 0 for both
+cases because piped stdio stops Windows allocating a console at all. Neither
+version was evidence. The probe that does work maps each visible console to its
+owning PID - that is the measurement quoted above.
+
+---
+
+## 11. Local-first: as the system comes online, stop spending tokens
+
+Operator command: "as you get online switch all to local so you can slowly stop
+using token and let system come online autonomous".
+
+Before: `policy.order` was `lmstudio, nvidia, deepseek, xpl, llamacpp-local`, so
+`route="auto"` escalated to a **paid** provider as soon as the local one
+hiccuped. The only spend-free path was the explicit `route="local"`, which no
+live path used by default.
+
+Now:
+
+* `abrasax/autonomy.py` turns liveness into a mode:
+  * any local provider up -> `local_only` (paid providers are not in the chain)
+  * none up -> `local_first` (paid only if `policy.paid_fallback`)
+  * `ABRASAX_LLM_MODE=auto|local_first|local_only` overrides per process
+* the **supervisor** writes `LOGS/llm-mode.json` every tick from the liveness it
+  already computed - the process that knows what is up decides what may be used;
+  the router honours that file only while it is fresh (180 s), so a dead
+  supervisor degrades to the config policy instead of pinning a dead provider;
+* the router builds the chain from `local_order + (paid_order if allowed)`, and
+  `route="local"` still *asserts* that no paid provider can be reached;
+* the JEV gate now fires on the transition into a paid provider, not on "not the
+  first name in the list" - escalating between two local providers costs nothing
+  and was only a failure mode.
+
+Live, 2026-11-01T18:14Z:
+
+```
+LOGS/llm-mode.json      mode=local_only  paid_allowed=false
+                        local_up=[llamacpp-local, lmstudio]
+SCRIPTS/_probe_local_route.py
+                        provider=lmstudio routed_via=lmstudio
+                        content='ROUTER-LOCAL-OK'   elapsed=2.14s (warm)
+                        LOCAL_ROUTE: OK
+gateway E2E             'LOCAL-ONLY-OK'  model=gemma-4-e2b-uncensored-hauhaucs-aggressive  30 tokens
+```
+
+Tests: `tests/test_local_first_routing.py` - 14 pass, and the important ones
+watch what is actually *called*: with `local_only`, a paid base_url never
+appears even when every local endpoint fails; with `local_first` and
+`paid_fallback=false` it still never appears; only `paid_fallback=true` with no
+local up reaches a paid provider.
+
+### D10 - a BOM in `providers.json` took the whole router offline
+
+Found while wiring this:
+
+```
+>>> from agents.agents_hub import llm_router as R
+>>> R._config()
+json.decoder.JSONDecodeError: Unexpected UTF-8 BOM (decode using utf-8-sig)
+00000000: EF BB BF 7B        <- providers.json starts with a UTF-8 BOM
+```
+
+Every route goes through `_config()`, so the gateway, the agents and the build
+loop all failed on the first line of the only file that says where a prompt
+goes. Nothing in this tree writes a BOM (`json.dumps` + UTF-8 does not);
+PowerShell 5.1 `Set-Content`/`Out-File` does exactly this, so an external tool
+rewrote the file. Fixed both ways: readers use `utf-8-sig` (a config file is
+input from other tools), and the file was re-serialised without the BOM.
+Regression test: a BOM-prefixed config still parses.
+
+### D11 - the autonomy probe called LM Studio "down" while it was up
+
+The first version probed `/v1/models` with no `Authorization` header. LM Studio
+requires `Bearer $LM_STUDIO_API_KEY`, so the probe got 401, urllib raised, and a
+healthy provider was recorded as absent. A 401 is the listener answering - the
+same rule `services.py` already applies. The probe now sends the key and counts
+`< 500` as up. `neo` was also removed from the probed set: it is flagged
+`local:true` but has no `base_url` (native adapter, explicit model id only), so
+it could only ever report a meaningless "down".
+
+### What "slowly stop using token" means in practice
+
+`paid_fallback: true` in `policy` is the one knob that allows spend, and it only
+applies when **no** local provider is up. To make the system strict before a
+long unattended run:
+
+```
+$env:ABRASAX_LLM_MODE = "local_only"      # per process, no edit needed
+```
+
+or set `policy.paid_fallback = false` in `CONFIG/llm/providers.json`. The live
+state is one line: `python -m abrasax autonomy`.
+"""
+p.write_text(s, encoding="utf-8", newline="")
+print("doc updated with sections 10-11")

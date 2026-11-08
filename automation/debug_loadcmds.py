@@ -1,0 +1,67 @@
+"""Debug the load-command walk: print raw command ids for one slice.
+
+Three prior parser bugs on this bundle (fat_arch alignment, LC_SEGMENT_64 offset,
+LC_CODE_SIGNATURE detection). This prints the ACTUAL command ids and sizes found
+so the correct offsets can be derived from bytes, not assumed.
+"""
+from __future__ import annotations
+
+import struct
+from pathlib import Path
+# DEAD PATH (sirch): original C:\Users\sirch\_WORK\fl_unpack dataset has no local equivalent on this host.
+
+P = Path(r"C:\abrasax\_DEAD_PATH\fl_unpack\Library\Audio\Plug-Ins\VST"
+         r"\FL Studio VSTi.vst\Contents\MacOS\vstplugin")
+
+CMD = {0x19: "LC_SEGMENT_64", 0x1B: "LC_UUID", 0x1D: "LC_CODE_SIGNATURE",
+       0x2: "LC_SYMTAB", 0x32: "LC_BUILD_VERSION", 0xD: "LC_ID_DYLIB",
+       0xC: "LC_LOAD_DYLIB", 0x80000022: "LC_DYLD_INFO_ONLY",
+       0x80000028: "LC_MAIN", 0x26: "LC_FUNCTION_STARTS",
+       0x1E: "LC_SEGMENT_SPLIT_INFO", 0x29: "LC_DATA_IN_CODE",
+       0x1C: "LC_LOAD_DYLINKER", 0x21: "LC_ENCRYPTION_INFO"}
+
+with P.open("rb") as fh:
+    magic = struct.unpack(">I", fh.read(4))[0]
+    n = struct.unpack(">I", fh.read(4))[0]
+    print(f"fat magic {magic:#x}, nfat={n}")
+    slices = []
+    for _ in range(n):
+        ct, sub, off, size, al = struct.unpack(">iiIII", fh.read(20))
+        slices.append((ct, off, size))
+        print(f"  slice cputype={ct:#x} off={off:#x} size={size:,}")
+
+    ct, off, size = slices[0]
+    fh.seek(off)
+    mh = fh.read(32)
+    m64 = struct.unpack("<I", mh[:4])[0]
+    print(f"\nslice0 @{off:#x}: magic={m64:#x}")
+    cputype, cpusub, filetype, ncmds, sizeofcmds, flags = struct.unpack("<iiIIII", mh[4:28])
+    print(f"  cputype={cputype:#x} filetype={filetype} ncmds={ncmds} sizeofcmds={sizeofcmds}")
+
+    base = off + 32
+    print(f"\nload commands from base={base:#x}:")
+    pos = base
+    for i in range(ncmds):
+        fh.seek(pos)
+        raw = fh.read(8)
+        if len(raw) < 8:
+            print(f"  [{i}] truncated")
+            break
+        cmd, cmdsize = struct.unpack("<II", raw)
+        name = CMD.get(cmd, f"{cmd:#x}")
+        extra = ""
+        if cmd == 0x1D and cmdsize >= 16:
+            fh.seek(pos + 8)
+            dataoff, datasize = struct.unpack("<II", fh.read(8))
+            extra = f"  dataoff={dataoff:,} datasize={datasize:,}"
+        elif cmd == 0x19 and cmdsize >= 64:
+            fh.seek(pos + 8)
+            segname = fh.read(16).split(b"\0")[0].decode("ascii", "replace")
+            fh.seek(pos + 8 + 32)  # vmaddr8 vmsize8 fileoff8 filesize8
+            fileoff, filesize = struct.unpack("<QQ", fh.read(16))
+            extra = f"  {segname:16} off={fileoff:,} size={filesize:,}"
+        print(f"  [{i:2}] {name:22} cmd={cmd:#08x} size={cmdsize:<4}{extra}")
+        if cmdsize < 8:
+            print("   BAD cmdsize, stopping")
+            break
+        pos += cmdsize

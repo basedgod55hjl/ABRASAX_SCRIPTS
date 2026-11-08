@@ -1,0 +1,103 @@
+"""Is the model swap in start_abrasax_stack.ps1 an improvement or a regression?
+
+The uncommitted change replaces the preload list:
+
+    BEFORE  prism-ml/bonsai-27b, liquid/lfm2.5-1.2b, text-embedding-nomic-embed-text-v1.5
+    AFTER   nvidia/nemotron-3-nano-4b, liquid/lfm2.5-1.2b, text-embedding-nomic-embed-text-v1.5
+
+Rationale is obvious: bonsai-27b takes minutes to load and saturates the 6 GB card,
+while nemotron-3-nano-4b is 4 B. That WOULD be an improvement -- except nemotron was
+measured earlier tonight as failing to load:
+
+    400 "Failed to load model nvidia/nemotron-3-nano-4b.
+         Error: Engine protocol startup was aborted."
+
+So the swap may trade a slow model for one that cannot start at all. This measures
+both models right now, serially, with a long timeout, and reports which is actually
+the better preload.
+
+If nemotron still fails, the change should be reverted -- a launcher that preloads a
+model which cannot load is worse than one that preloads a slow model, because the
+failure is silent at startup.
+"""
+import json
+import sys
+import time
+import urllib.error
+import urllib.request
+
+BASE = "http://127.0.0.1:1234"
+
+CANDIDATES = [
+    ("prism-ml/bonsai-27b", "was preloaded before the change"),
+    ("nvidia/nemotron-3-nano-4b", "the change's replacement"),
+    ("liquid/lfm2.5-1.2b", "present in both lists"),
+    ("text-embedding-nomic-embed-text-v1.5", "present in both lists"),
+]
+
+
+def probe(model, timeout=300):
+    is_embed = "embed" in model.lower()
+    path = "/v1/embeddings" if is_embed else "/v1/chat/completions"
+    body = ({"model": model, "input": "x"} if is_embed else
+            {"model": model, "messages": [{"role": "user", "content": "hi"}],
+             "max_tokens": 8})
+    data = json.dumps(body).encode()
+    req = urllib.request.Request(f"{BASE}{path}", data=data, method="POST",
+                                 headers={"Content-Type": "application/json"})
+    t0 = time.time()
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            r.read()
+            return True, round(time.time() - t0, 1), ""
+    except urllib.error.HTTPError as e:
+        return False, round(time.time() - t0, 1), \
+               f"HTTP {e.code}: {e.read().decode('utf-8', 'replace')[:120]}"
+    except Exception as e:  # noqa: BLE001
+        return False, round(time.time() - t0, 1), f"{type(e).__name__}"
+
+
+print("=== serial probe, 300 s timeout each ===")
+results = {}
+for model, note in CANDIDATES:
+    okc, secs, err = probe(model)
+    results[model] = (okc, secs, err)
+    mark = "OK  " if okc else "FAIL"
+    print(f"  {mark} {model:44s} {secs:6.1f}s  {note}")
+    if err:
+        print(f"        {err}")
+    time.sleep(2)
+
+print("\n=== VERDICT ===")
+bonsai = results["prism-ml/bonsai-27b"]
+nemotron = results["nvidia/nemotron-3-nano-4b"]
+
+print(f"  bonsai-27b        : {'loads' if bonsai[0] else 'FAILS'} ({bonsai[1]}s)")
+print(f"  nemotron-3-nano-4b: {'loads' if nemotron[0] else 'FAILS'} ({nemotron[1]}s)")
+
+if nemotron[0] and not bonsai[0]:
+    verdict = "SWAP IS AN IMPROVEMENT -- nemotron works, bonsai does not"
+elif nemotron[0] and bonsai[0]:
+    verdict = (f"BOTH WORK -- nemotron at {nemotron[1]}s vs bonsai at {bonsai[1]}s; "
+               f"the swap is a latency win")
+elif not nemotron[0] and bonsai[0]:
+    verdict = ("SWAP IS A REGRESSION -- nemotron fails, bonsai works. The launcher "
+               "should be reverted or nemotron dropped from the preload list.")
+else:
+    verdict = "BOTH FAIL -- neither is a good preload target tonight"
+
+print(f"\n  {verdict}")
+
+# what the launcher should do: list which of the current list actually work
+print("\n=== what a safe preload list looks like ===")
+working = [m for m, (okc, _, _) in results.items() if okc]
+print(f"  working now: {len(working)}/{len(CANDIDATES)}")
+for m in working:
+    print(f"    {m}")
+
+out = r"C:\ABRASAX\LOGS\preload-verdict.json"
+with open(out, "w", encoding="utf-8") as f:
+    json.dump({"results": {m: {"ok": v[0], "secs": v[1], "err": v[2]}
+                           for m, v in results.items()},
+               "verdict": verdict, "working": working}, f, indent=2)
+print(f"\nwrote {out}")

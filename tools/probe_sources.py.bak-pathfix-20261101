@@ -1,0 +1,189 @@
+"""Enumerate the actual source sensors behind every value we publish.
+
+"Source sensor" has two distinct meanings and the sector needs both:
+
+  1. INVENTORY - which physical sensors exist on this handset, by hardware
+     part number, vendor, type and handle. `dumpsys sensorservice` reports the
+     device list; this groups it and exposes the raw part names (lsm6dsv_0,
+     ak0991x_0, bmp5, STK33F11...) rather than the friendly labels.
+
+  2. PROVENANCE - for each field in a published sample, which of those sensors
+     produced it, and through which transport.
+
+The point is falsifiability: if `mag` says it came from ak0991x_0, that handle
+must exist in the inventory. Anything that cannot be traced to a handle is a
+derived or synthetic value and must be labelled so.
+"""
+import json
+import re
+import subprocess
+import sys
+
+sys.path.insert(0, r"C:\ABRASAX")
+
+ADB = r"C:\Users\sirch\Android\platform-tools\adb.exe"
+SERIAL = "R5CY308WZVK"
+
+# Android Sensor types -> the field they populate in a published sample.
+# Sourced from android.hardware.Sensor constants.
+TYPE_NAMES = {
+    1: ("accelerometer", "imu[0:3]"),
+    2: ("magnetic_field", "mag[0:3]"),
+    4: ("gyroscope", "imu[3:6]"),
+    5: ("light", "env[1]"),
+    6: ("pressure", "env[0]"),
+    8: ("proximity", "proximity"),
+    9: ("gravity", "gravity_direction"),
+    10: ("linear_acceleration", "linear_acc"),
+    11: ("rotation_vector", "rotation_vector"),
+    15: ("game_rotation_vector", None),
+    18: ("step_counter", "steps"),
+    19: ("step_detector", None),
+    20: ("geomagnetic_rotation_vector", None),
+    27: ("uncalibrated_accelerometer", None),
+    35: ("uncalibrated_gyroscope", None),
+    36: ("uncalibrated_magnetometer", None),
+}
+
+
+def sh(cmd, timeout=30):
+    return subprocess.run([ADB, "-s", SERIAL, "shell", cmd],
+                          capture_output=True, text=True, timeout=timeout).stdout
+
+
+def inventory():
+    """Parse the Sensor Device block into structured rows."""
+    dump = sh("dumpsys sensorservice")
+    rows = []
+    in_dev = False
+    for line in dump.splitlines():
+        if line.startswith("Sensor Device:"):
+            in_dev = True
+            continue
+        if in_dev and line.startswith("Recent Sensor events"):
+            break
+        if not in_dev:
+            continue
+        m = re.match(r"^(?P<name>.+?)\s*\((?:handle=)?0x(?P<handle>[0-9a-fA-F]+)\)?"
+                     r"\s*active-count\s*=\s*(?P<ac>\d+)", line)
+        if not m:
+            # some lines put the handle before the active count
+            m2 = re.match(r"^(?P<name>.+?)\s+\(handle=0x(?P<handle>[0-9a-fA-F]+)\)",
+                          line)
+            if not m2:
+                continue
+            m = m2
+        name = m.group("name").strip()
+        # strip Android's friendly prefix to recover the hardware part number
+        part = None
+        for token in re.split(r"[\s]+", name):
+            if re.match(r"^[a-z]{2,}\d+[a-z]*_\d+$|^[A-Z]{2,}\d+[A-Z0-9]*$|^bmp\d+$", token):
+                part = token
+                break
+        rows.append({
+            "name": name,
+            "handle": m.group("handle").lower(),
+            "active_count": int(m.group("ac")),
+            "part": part,
+            "handle_type": line.split("active-count")[0].strip()[-1:] if False else None,
+        })
+    # dedupe by handle (same sensor can appear once)
+    seen, out = set(), []
+    for r in rows:
+        if r["handle"] in seen:
+            continue
+        seen.add(r["handle"])
+        out.append(r)
+    return out
+
+
+def events(dump=None):
+    """Newest reading per sensor name, to prove the handle is live."""
+    text = dump if dump is not None else sh("dumpsys sensorservice")
+    readings = {}
+    cur = None
+    for line in text.splitlines():
+        h = re.match(r"^(?P<name>.+?):\s+last\s+(?P<n>\d+)\s+events\s*$", line.rstrip())
+        if h:
+            cur = h.group("name").strip()
+            continue
+        e = re.match(r"^\s*\d+\s+\(ts=(?P<ts>[\d.]+),\s*wall=[^)]*\)\s*(?P<vals>.*)$", line)
+        if cur and e:
+            vals = [float(x) for x in re.findall(r"-?\d+(?:\.\d+)?", e.group("vals"))]
+            if vals:
+                readings[cur] = vals
+    return readings
+
+
+def main():
+    inv = inventory()
+    live = events()
+
+    print(f"=== INVENTORY: {len(inv)} sensors reported ===\n")
+    by_part = {}
+    for r in inv:
+        by_part.setdefault(r["part"] or "(no part id)", []).append(r)
+
+    for part in sorted(by_part):
+        group = by_part[part]
+        print(f"  {part}")
+        for r in group:
+            has_data = r["name"] in live
+            mark = "live" if has_data else "    "
+            vals = live.get(r["name"])
+            vtxt = ""
+            if vals:
+                vtxt = "  " + ", ".join(f"{v:.2f}" for v in vals[:4])
+            print(f"    [{mark}] handle 0x{r['handle']:<8} {r['name'][:56]}{vtxt}")
+        print()
+
+    # ---- provenance: which handle backs which published field --------------
+    print("=== PROVENANCE: published field -> source sensor ===\n")
+
+    def find(*needles):
+        for r in inv:
+            low = r["name"].lower()
+            if all(n.lower() in low for n in needles):
+                return r
+        return None
+
+    claims = [
+        ("imu[0:3]  accel", find("accelerometer"), False),
+        ("imu[3:6]  gyro", find("gyroscope"), False),
+        ("mag[0:3]", find("magnetometer"), False),
+        ("env[0]    pressure", find("pressure"), False),
+        ("env[1]    light", find("ambient light"), False),
+        ("proximity", find("proximity"), False),
+        ("rotation_vector", find("rotation vector"), False),
+        ("gravity_direction", find("gravity"), True),
+        ("linear_acc", find("linear_acceleration"), True),
+        ("steps", find("step_counter"), False),
+        ("altitude_m", find("pressure"), True),
+    ]
+
+    untraced = 0
+    for field, row, derived in claims:
+        if row is None:
+            print(f"  {field:<22} UNTRACED - no matching sensor in inventory")
+            untraced += 1
+            continue
+        prov = "derived" if derived else "measured"
+        if derived:
+            basis = {"gravity_direction": "unit(-accel)",
+                     "linear_acc": "accel - g*unit(accel)",
+                     "altitude_m": "barometric formula from pressure"}[field]
+            print(f"  {field:<22} {prov:<9} from {row['part'] or row['name']} "
+                  f"(0x{row['handle']}) via {basis}")
+        else:
+            print(f"  {field:<22} {prov:<9} {row['part'] or row['name']} "
+                  f"(0x{row['handle']})")
+
+    print(f"\n  untraced fields: {untraced}")
+    print(f"  distinct hardware parts: {len(by_part)}")
+    parts = sorted(p for p in by_part if p != "(no part id)")
+    print(f"  parts: {', '.join(parts)}")
+    return 0 if untraced == 0 else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

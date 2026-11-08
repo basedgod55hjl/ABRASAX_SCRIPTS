@@ -1,0 +1,93 @@
+"""Final verification: which of the five named models can actually serve a request?
+
+Run serially, one model at a time, with a settle delay, because the concurrent probe
+on line 1 of this investigation produced a false all-fail result.
+
+Prints, per model: listing status, HTTP response, latency, and the exact error text
+if any. This is the number that goes in the documentation, so it must be right.
+"""
+import json
+import time
+import urllib.error
+import urllib.request
+
+BASE = "http://127.0.0.1:1234"
+NAMED = [
+    "liquid/lfm2.5-1.2b",
+    "prism-ml/bonsai-27b",
+    "text-embedding-nomic-embed-text-v1.5",
+    "nvidia/nemotron-3-nano-4b",
+    "deepseek/deepseek-r1-0528-qwen3-8b",
+]
+
+
+def post(path, body, timeout=180):
+    data = json.dumps(body).encode()
+    req = urllib.request.Request(f"{BASE}{path}", data=data, method="POST",
+                                 headers={"Content-Type": "application/json"})
+    t0 = time.time()
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            payload = json.loads(r.read().decode())
+            return r.status, payload, round(time.time() - t0, 1), None
+    except urllib.error.HTTPError as e:
+        return e.code, None, round(time.time() - t0, 1), \
+               e.read().decode("utf-8", "replace")[:200]
+    except Exception as e:  # noqa: BLE001
+        return None, None, round(time.time() - t0, 1), f"{type(e).__name__}: {e}"
+
+
+with urllib.request.urlopen(f"{BASE}/v1/models", timeout=10) as r:
+    listed = {m["id"] for m in json.loads(r.read().decode())["data"]}
+
+print(f"=== FINAL VERIFICATION ({len(listed)} models listed) ===\n")
+print(f"{'model':44s} {'listed':7s} {'http':>5} {'secs':>6}  result")
+print("-" * 96)
+
+results = []
+for m in NAMED:
+    is_listed = m in listed
+    if not is_listed:
+        print(f"{m:44s} {'NO':7s} {'-':>5} {'-':>6}  not offered by the server")
+        results.append((m, False, None, None, "not listed"))
+        continue
+
+    if "embed" in m.lower():
+        st, payload, secs, err = post("/v1/embeddings",
+                                      {"model": m, "input": "probe"}, timeout=120)
+        ok = st == 200 and payload is not None
+        detail = "embedded, dim=%d" % len(payload["data"][0]["embedding"]) if ok else (err or "")
+    else:
+        st, payload, secs, err = post("/v1/chat/completions",
+                                      {"model": m,
+                                       "messages": [{"role": "user", "content": "hi"}],
+                                       "max_tokens": 1, "temperature": 0})
+        ok = st == 200 and payload is not None
+        detail = "answered" if ok else (err or "")[:70]
+
+    print(f"{m:44s} {'yes':7s} {str(st):>5} {str(secs):>6}  {detail[:44]}")
+    results.append((m, ok, st, secs, detail))
+    time.sleep(2.5)
+
+serving = [r for r in results if r[1]]
+blocked = [r for r in results if not r[1]]
+
+print("\n=== SUMMARY ===")
+print(f"  serving : {len(serving)}/{len(NAMED)}")
+for m, _, st, secs, _ in serving:
+    print(f"    {m}  ({secs}s)")
+
+print(f"  blocked : {len(blocked)}")
+for m, _, st, secs, detail in blocked:
+    engine = "engine startup aborted" if "Engine protocol" in (detail or "") else \
+             ("not listed" if detail == "not listed" else "other")
+    print(f"    {m}")
+    print(f"        http={st}  cause={engine}")
+
+out = r"C:\ABRASAX\LOGS\final-model-state.json"
+with open(out, "w", encoding="utf-8") as f:
+    json.dump({"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+               "serving": [r[0] for r in serving],
+               "blocked": [{"model": r[0], "http": r[2], "detail": r[4]} for r in blocked],
+               "method": "serial, 2.5 s settle between calls"}, f, indent=2)
+print(f"\n  wrote {out}")

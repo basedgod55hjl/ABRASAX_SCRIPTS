@@ -1,0 +1,130 @@
+#!/usr/bin/env python3
+"""Scan every tracked file for credential-shaped strings.
+
+The build gate had a secret check, but it was `check_secret_rules.py` -- a unit
+test of the classifier against fixed vectors. It never looked at the repository, so
+a live key could sit in a tracked JSON file and the gate stayed green. One did:
+
+    CONFIG/llm/providers.json  providers.lmstudio.auth = "Bearer sk-lm-..."
+
+while .env held a different value for the same provider. Two sources of truth, one
+of them in git history.
+
+This scans `git ls-files` (so untracked .env is out of scope by construction),
+classifies each candidate token with the shared `secret_rules` classifier, and
+skips placeholders by the same rule the redactor uses. Output masks every token --
+a scanner that prints the secret it found has just leaked it again.
+
+Exit 0 = no credential-shaped strings in tracked files.
+"""
+from __future__ import annotations
+
+import os
+import re
+import subprocess
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from secret_rules import classify, is_placeholder, mask  # noqa: E402
+
+ROOT = r"C:\ABRASAX"
+MAX_BYTES = 4 * 1024 * 1024
+SKIP_EXT = {".png", ".jpg", ".jpeg", ".gif", ".ico", ".pdf", ".zip", ".gz", ".7z",
+            ".dll", ".exe", ".pyd", ".so", ".bin", ".gguf", ".cubin", ".pt", ".onnx",
+            ".woff", ".woff2", ".ttf", ".mp4", ".wav", ".db", ".sqlite", ".pyc"}
+
+# Tokens the classifier already knows how to judge; this regex only has to find
+# *candidates* cheaply, so it errs wide and lets classify() reject.
+#: Files that still carry a hardcoded credential. They are pre-rebuild copies that
+#: are not on the running path; each one is a retirement candidate. This is a debt
+#: register, not permission: a hit anywhere else fails the check, and the key these
+#: files contain MUST be rotated because it is in git history.
+KNOWN_LEGACY = {
+    "ENGINE/abrasax_engine/abrasax_ultimate_wire.py",
+    "ENGINE/abrasax_engine/e2e_boot.py",
+    "ENGINE/abrasax_engine/engine_core.py",
+    "ENGINE/abrasax_engine/production_wire.py",
+    "SYSTEMS/ABRASAX-System32-AI/ABRASAX-UI/src/abrasax_agent_gui.py",
+    "SYSTEMS/ABRASAX-System32-AI/ABRASAX-UI/src/abrasax_imgui_dashboard.py",
+    "SYSTEMS/ABRASAX-System32-AI/ABRASAX-UI/src/abrasax_live_dashboard.py",
+    "SYSTEMS/ABRASAX-System32-AI/ABRASAX-UI/src/abrasax_live_gui.py",
+    "SYSTEMS/source-runtime/autonomous.py",
+    "SYSTEMS/source-runtime/llm_roles_runner.py",
+    "SYSTEMS/source-runtime/llm_selfopt.py",
+    "SYSTEMS/source-runtime/llm_stream.py",
+    "SYSTEMS/source-runtime/llm_tools.py",
+    "SYSTEMS/source-runtime/local_nexus.py",
+    "SYSTEMS/source-runtime/local_router.py",
+    "SYSTEMS/source-runtime/resilience/watchdog.py",
+    "SYSTEMS/source-runtime/self_reflect.py",
+    "UI/abrasax-ui/src/abrasax_agent_gui.py",
+    "UI/abrasax-ui/src/abrasax_imgui_dashboard.py",
+    "UI/abrasax-ui/src/abrasax_live_dashboard.py",
+    "UI/abrasax-ui/src/abrasax_live_gui.py",
+    "UI/abrasax-ui/src/abrasax_live_logging.py",
+    "tools/_ds_base_check.py",
+    "tools/source-tools/brains/abraxas_holographic_node.py",
+    "tools/source-tools/brains/abraxas_node_ws.mjs",
+    "GGUFF/run.cmd.bak-secret-20261101-180022",
+}
+
+#: Deliberate test fixtures that contain real-looking tokens by design.
+EXCLUDED = {
+    "SCRIPTS/automation/check_secret_rules.py",
+    # This test's whole job is to prove the classifier catches credential-shaped strings,
+    # so it carries two of them as parameters. Scanning it indicts the proof, not the tree.
+    "tests/test_repo_secret_scan.py",
+}
+
+CANDIDATE = re.compile(r"[A-Za-z0-9_\-\.:/+]{16,}")
+
+
+def tracked_files() -> list[str]:
+    out = subprocess.run(["git", "-C", ROOT, "ls-files"], capture_output=True,
+                         text=True, timeout=120).stdout.split()
+    return [rel for rel in out if os.path.splitext(rel)[1].lower() not in SKIP_EXT]
+
+
+def scan_line(line: str):
+    for m in CANDIDATE.finditer(line):
+        token = m.group(0)
+        prefix, ok, _why = classify(token)
+        if not ok or is_placeholder(token):
+            continue
+        yield m.start(1) if m.groups() else m.start(), token
+
+
+def main() -> int:
+    findings = []
+    legacy = []
+    files = [f for f in tracked_files() if f not in EXCLUDED]
+    for rel in files:
+        full = os.path.join(ROOT, rel.replace("/", os.sep))
+        try:
+            if os.path.getsize(full) > MAX_BYTES:
+                continue
+            text = open(full, encoding="utf-8", errors="ignore").read()
+        except OSError:
+            continue
+        for lineno, line in enumerate(text.splitlines(), 1):
+            for _col, token in scan_line(line):
+                bucket = legacy if rel in KNOWN_LEGACY else findings
+                bucket.append((rel, lineno, mask(token)))
+
+    print(f"scanned {len(files)} tracked file(s)")
+    for rel, lineno, masked in findings:
+        print(f"  SECRET  {rel}:{lineno}  {masked}")
+    print(f"new findings: {len(findings)}")
+    if legacy:
+        print(f"known-legacy occurrences (retirement debt): {len(legacy)}")
+        for rel, lineno, masked in legacy[:40]:
+            print(f"  legacy  {rel}:{lineno}  {masked}")
+    if findings:
+        print("move credentials into .env (gitignored) and rotate anything that was "
+              "committed: history keeps it.")
+    return 1 if findings else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

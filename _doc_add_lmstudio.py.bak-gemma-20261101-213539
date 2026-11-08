@@ -1,0 +1,77 @@
+from pathlib import Path
+
+p = Path(r"C:\abrasax\DOC\RUN-STATE-20261101T1735Z.md")
+s = p.read_text(encoding="utf-8")
+assert "## 9. LM Studio" not in s
+
+s += """
+---
+
+## 9. LM Studio: the dependency nobody owned
+
+Found *after* the stack verified clean: `verify_stack_run.py` reported
+`FAIL http lmstudio :1234 [None …]` and `ops-state` went to
+`down:lmstudio`. Three separate faults, each proved live.
+
+### D7 - nothing could restart it
+
+`lmstudio` is catalogued with `entry: None` / `launch: None` ("external desktop
+app"), so it was in neither the services autostart nor AUTOSTART: the supervisor
+could only watch it die. Added to AUTOSTART with `lms` as a hard prerequisite
+(`requires`) and `:1234` as the required bind.
+
+### D8 - a slow boot was recorded as a broken binary
+
+First live attempt, 17:54:19Z:
+
+```
+{"event": "blocked", "svc": "lmstudio", "error": "never bound :1234"}
+```
+
+`:1234` answered **200 one second later** - `lms server start` needs 3-6 s and
+the bind grace was a flat 3.0 s. The failure path also wrote "never bound" into
+`_exe_probe_cache` with a 600 s TTL, so `_exe_unrunnable` would then treat the
+healthy CLI as broken and preflight would refuse to start it for ten minutes.
+Bind grace is now per-service (`bind_grace_s: 15`) and a bind timeout no longer
+touches the exe cache.
+
+### D9 - the server deletes the directory its own loader needs
+
+```
+lms server stop   -> Stopped the server on port 1234
+lms server start  -> Success! Server is now running on port 1234
+lms load liquid/lfm2.5-1.2b
+  Error: ENOENT ... mkdtemp
+  'C:\\Users\\lucar\\.lmstudio\\.internal\\temp\\lmstudio-chat-template-XXXXXX'
+```
+
+Stopping the server removes `~/.lmstudio/.internal/temp`; the next server never
+recreates it, so **every chat-model load fails** while the server reports itself
+healthy. The launch of record is now `tools/lmstudio_start.py`: recreate the
+directory, start the server, wait for `/v1/models`, optionally `--load`, exit 0
+only when the API answers.
+
+Proof after the change - server stopped, `llmster` killed, temp dir deleted:
+
+```
+17:59:46Z {"event": "start", "svc": "lmstudio", "pid": 21976,
+           "cmd": ["...pythonw.exe", "C:\\abrasax\\tools\\lmstudio_start.py"]}
+:1234/v1/models -> 200        temp dir -> recreated
+POST :9001/v1/chat/completions (cold LM Studio, JIT load)
+  -> "OSIRISBLXCK-CLOSED"  36 tokens  3.1 s
+```
+
+Tests: `test_supervisor_lmstudio_autostart.py` (3),
+`test_supervisor_bind_grace.py` (5), `test_lmstudio_start.py` (5).
+
+### Final numbers for this pass
+
+```
+python -m pytest -q            365 passed, 2 skipped   (108.83 s)
+verify_stack_run.py            STACK RUN: OK up=16 down=3 failed=0
+gateway E2E (cold)             "OSIRISBLXCK-CLOSED", 36 tokens, 3.1 s
+git log -1                     f7808ae (main, 8 commits ahead of origin/main)
+```
+"""
+p.write_text(s, encoding="utf-8", newline="")
+print("doc updated with §9")

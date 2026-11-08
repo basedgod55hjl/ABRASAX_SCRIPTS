@@ -1,0 +1,55 @@
+@echo off
+chcp 65001 >nul
+title ABRASAX TUI - PRIMAL_HEX 4f5349524953424c58434b | phi 1.618
+set "ROOT=C:\abrasax"
+set "PYTHONPATH=%ROOT%"
+set "ABRASAX_ROOT=%ROOT%"
+set "LM_STUDIO_URL=http://127.0.0.1:1234/v1"
+
+REM ============================================================
+REM  GLOBAL DEEPSEEK CONFIG  (secrets never hardcoded here)
+REM  Persisted at user scope: HKCU\Environment\DEEPSEEK_API_KEY
+REM ============================================================
+for /f "tokens=2,*" %%A in ('reg query "HKCU\Environment" /v DEEPSEEK_API_KEY 2^>nul ^| findstr /i DEEPSEEK_API_KEY') do set "DEEPSEEK_API_KEY=%%B"
+if not defined DEEPSEEK_API_KEY (
+    echo [!!] DEEPSEEK_API_KEY is not set. Set it once with:
+    echo      setx DEEPSEEK_API_KEY "sk-..."
+    pause
+    exit /b 1
+)
+
+set "DEEPSEEK_BASE_URL=https://api.deepseek.com"
+set "DEEPSEEK_UPSTREAM_URL=https://api.deepseek.com/v1"
+set "DEEPSEEK_BETA_BASE_URL=https://api.deepseek.com/beta"
+set "DEEPSEEK_ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic"
+set "DEEPSEEK_PRIMARY_MODEL=deepseek-v4-pro"
+set "DEEPSEEK_FAST_MODEL=deepseek-flash"
+set "DEEPSEEK_VISION_MODEL=deepseek-flash"
+set "DEEPSEEK_MODEL=%DEEPSEEK_PRIMARY_MODEL%"
+
+REM --- Anthropic-compatible surface (Claude Code + claude-cli-sdk) ---
+set "ANTHROPIC_BASE_URL=%DEEPSEEK_ANTHROPIC_BASE_URL%"
+set "ANTHROPIC_AUTH_TOKEN=%DEEPSEEK_API_KEY%"
+REM Claude Code warns (and may pick a stale stored key) when ANTHROPIC_API_KEY is
+REM also set. Clear it so only the token is used.
+set "ANTHROPIC_API_KEY="
+set "ANTHROPIC_MODEL=%DEEPSEEK_PRIMARY_MODEL%"
+set "ANTHROPIC_DEFAULT_OPUS_MODEL=%DEEPSEEK_PRIMARY_MODEL%"
+set "ANTHROPIC_DEFAULT_SONNET_MODEL=%DEEPSEEK_PRIMARY_MODEL%"
+set "ANTHROPIC_DEFAULT_HAIKU_MODEL=%DEEPSEEK_FAST_MODEL%"
+set "CLAUDE_CODE_SUBAGENT_MODEL=%DEEPSEEK_FAST_MODEL%"
+set "CLAUDE_DEFAULT_MODEL=%DEEPSEEK_PRIMARY_MODEL%"
+
+REM --- JEV / TypeSafe System One decision engine ---
+if not defined TYPESAFE_BASE_URL set "TYPESAFE_BASE_URL=https://api.typesafe.ai/v1/systemone"
+if not defined TYPESAFE_MODEL set "TYPESAFE_MODEL=jev-latest"
+if not defined ABRASAX_JEV_LOCAL_URL set "ABRASAX_JEV_LOCAL_URL=http://127.0.0.1:8000/v1/systemone"
+
+if not exist "%ROOT%\.venv\Scripts\python.exe" (
+    echo [!!] ABRASAX .venv not found at "%ROOT%\.venv"
+    pause
+    exit /b 1
+)
+
+"%ROOT%\.venv\Scripts\python.exe" -m ui.chat
+pause

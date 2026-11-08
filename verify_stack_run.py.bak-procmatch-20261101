@@ -1,0 +1,327 @@
+"""verify_stack_run.py -- one read-only verdict on the live ABRASAX stack.
+
+The supervisor reports "up" from a TCP/health probe. That is necessary, not
+sufficient. This verifier answers: is the *run* healthy right now?
+
+Checks (all read-only, no service is started or stopped):
+  1. LOGS/supervisor-heartbeat.txt is fresh, its pid is the pidfile owner, that
+     owner is alive, and exactly ONE logical supervisor is running.
+  2. LOGS/supervisor-state.json partitions services (no id in both up and down),
+     is sorted, and is not older than the heartbeat.
+  3. every service the state calls "up" answers an HTTP endpoint (TCP alone is
+     not evidence that the process is doing its job).
+  4. exactly one listener pid per expected port (two brain listeners sharing
+     :9626 under SO_REUSEADDR was a real defect on 2026-10-24).
+  5. gateway /brain/state `steps` == brain :9626/state `steps` (step parity;
+     a frozen gateway mirror was defect D1 on 2026-10-17).
+
+Two host facts are encoded here because they caused false FAILs first:
+  * `pythonw.exe` in C:\\ABRASAX\\PYTHON\\.venv_gui re-execs itself, so ONE
+    logical supervisor is a shim/child PID pair -> collapse parent/child links.
+  * netstat prints one row per address family, so the same pid may appear twice
+    for one listener -> compare unique pids.
+
+Exit 0 = every check passed. Exit 1 = at least one failed.
+
+    python SCRIPTS/verify_stack_run.py            # human table
+    python SCRIPTS/verify_stack_run.py --json     # machine
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+LOGS = ROOT / "LOGS"
+STATE = LOGS / "supervisor-state.json"
+HEARTBEAT = LOGS / "supervisor-heartbeat.txt"
+PIDFILE = LOGS / "supervisor.pid"
+
+HEARTBEAT_MAX_AGE_S = 120
+
+# port -> candidate paths, tried in order. A service only needs one to answer.
+HTTP_PATHS: dict[int, tuple[str, ...]] = {
+    1234: ("/v1/models", "/health"),
+    8090: ("/",),
+    8765: ("/health", "/"),
+    8766: ("/health", "/"),
+    8777: ("/health", "/v1/models"),
+    8795: ("/health", "/"),
+    9001: ("/health", "/brain/state"),
+    9624: ("/health", "/state"),
+    9625: ("/health", "/state"),
+    9626: ("/health", "/state"),
+    9627: ("/health",),
+    9782: ("/health", "/"),
+}
+
+PORT_OF_SERVICE = {
+    "abrasax-gateway": 9001,
+    "node-lm": 8777,
+    "abrasax-brain": 9626,
+    "abrasax-ui": 8090,
+    "cellbrain": 9624,
+    "synaptic-brain": 9625,
+    "filetool": 8765,
+    "codec-gateway": 8766,
+    "harvest-helper": 8795,
+    "routerfail": 9782,
+    "floating-brain-overlay": 9627,
+    "floating-brain": 9700,
+    "lmstudio": 1234,
+}
+
+# Services whose absence is a proven missing external dependency, not a defect.
+KNOWN_ABSENT = {
+    "comfyui": "ComfyUI install absent (C:\\abrasax\\TOOLS\\AI-ImageGen missing)",
+    "imagegen": "Imagen server absent (same tree)",
+    "llamacpp-local": "llama-server.exe is a 10 kB stub; model path never existed",
+    "vlc-7d-sampler": "needs a running VLC rc interface on :9999",
+}
+
+
+def _age_s(path: Path) -> float | None:
+    try:
+        return time.time() - path.stat().st_mtime
+    except OSError:
+        return None
+
+
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        import ctypes
+
+        k32 = ctypes.windll.kernel32
+        k32.OpenProcess.restype = ctypes.c_void_p
+        h = k32.OpenProcess(0x1000, 0, pid)
+        if not h:
+            return False
+        code = ctypes.c_uint32(0)
+        k32.GetExitCodeProcess(ctypes.c_void_p(h), ctypes.byref(code))
+        k32.CloseHandle(ctypes.c_void_p(h))
+        return code.value == 259  # STILL_ACTIVE
+    except Exception:  # noqa: BLE001 - non-Windows fallback
+        try:
+            import os
+
+            os.kill(pid, 0)
+            return True
+        except Exception:  # noqa: BLE001
+            return False
+
+
+def _http(port: int, paths: tuple[str, ...], timeout: float = 4.0) -> dict:
+    for path in paths:
+        url = f"http://127.0.0.1:{port}{path}"
+        t0 = time.time()
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as r:
+                body = r.read(4096)
+                return {"path": path, "status": r.status,
+                        "ms": round((time.time() - t0) * 1000, 1),
+                        "body": body.decode("utf-8", "replace")}
+        except urllib.error.HTTPError as exc:
+            # 401/403 is the service answering; it is alive.
+            return {"path": path, "status": exc.code,
+                    "ms": round((time.time() - t0) * 1000, 1),
+                    "body": (exc.read(2048) or b"").decode("utf-8", "replace")}
+        except Exception:  # noqa: BLE001 - try the next path
+            continue
+    return {"path": None, "status": None, "ms": None, "body": ""}
+
+
+def _listeners(ports: set[int]) -> dict[int, list[int]]:
+    """port -> owning pids, from netstat (no PowerShell dependency)."""
+    out: dict[int, list[int]] = {}
+    try:
+        txt = subprocess.run(["netstat", "-ano", "-p", "tcp"], capture_output=True,
+                             text=True, timeout=25).stdout
+    except Exception:  # noqa: BLE001
+        return out
+    for line in txt.splitlines():
+        parts = line.split()
+        if len(parts) < 5 or parts[0].upper() != "TCP":
+            continue
+        if parts[3].upper() != "LISTENING":
+            continue
+        try:
+            port = int(parts[1].rsplit(":", 1)[1])
+            pid = int(parts[4])
+        except (ValueError, IndexError):
+            continue
+        if port in ports:
+            out.setdefault(port, []).append(pid)
+    return out
+
+
+def _sample_supervisor_procs() -> list[tuple[int, int]]:
+    """(pid, parent_pid) for every process whose command line is supervisor.py."""
+    try:
+        ps = ("Get-CimInstance Win32_Process | Where-Object {$_.CommandLine -like "
+              "'*supervisor.py*'} | ForEach-Object { \"$($_.ProcessId) $($_.ParentProcessId)\" }")
+        txt = subprocess.run(["powershell", "-NoProfile", "-Command", ps],
+                             capture_output=True, text=True, timeout=40).stdout
+    except Exception:  # noqa: BLE001
+        return []
+    out: list[tuple[int, int]] = []
+    for line in txt.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and all(p.isdigit() for p in parts):
+            out.append((int(parts[0]), int(parts[1])))
+    return out
+
+
+def _collapse(first: list[tuple[int, int]],
+              second: list[tuple[int, int]]) -> tuple[list[int], list[int], int]:
+    """Pure: keep only pids seen in BOTH samples, then collapse shim->child pairs.
+
+    Returns (logical_roots, stable_pids, transient_count). pythonw.exe in
+    C:\\ABRASAX\\PYTHON\\.venv_gui re-execs itself, so ONE logical supervisor is a
+    parent/child pid pair; a spawner that loses the pidfile claim disappears
+    between samples, so it must not be counted as a second supervisor.
+    """
+    stable = {p for p, _ in first} & {p for p, _ in second}
+    transient = len({p for p, _ in first} | {p for p, _ in second}) - len(stable)
+    procs = [(p, parent) for p, parent in second if p in stable]
+    roots = [p for p, parent in procs if parent not in stable]
+    return sorted(roots), sorted(stable), transient
+
+
+def _logical_supervisors(settle_s: float = 2.5) -> tuple[list[int], list[int], int]:
+    first = _sample_supervisor_procs()
+    time.sleep(settle_s)
+    return _collapse(first, _sample_supervisor_procs())
+
+
+def verify() -> dict:
+    checks: list[dict] = []
+
+    def check(name: str, ok: bool, detail: str = "") -> None:
+        checks.append({"check": name, "ok": bool(ok), "detail": detail})
+
+    # ---- 1. heartbeat / supervisor identity -------------------------------
+    hb_ts, hb_pid = None, 0
+    try:
+        raw = HEARTBEAT.read_text(encoding="utf-8").strip()
+        hb_ts = raw.split()[0]
+        for tok in raw.split():
+            if tok.startswith("pid="):
+                hb_pid = int(tok[4:])
+    except (OSError, ValueError, IndexError):
+        raw = ""
+    age = _age_s(HEARTBEAT)
+    check("heartbeat fresh", age is not None and age < HEARTBEAT_MAX_AGE_S,
+          f"age={None if age is None else round(age, 1)}s (limit {HEARTBEAT_MAX_AGE_S}s)")
+    try:
+        owner = int(PIDFILE.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        owner = 0
+    check("pidfile owner alive", _pid_alive(owner), f"pid={owner}")
+    check("heartbeat pid == pidfile owner", hb_pid == owner and owner != 0,
+          f"heartbeat={hb_pid} pidfile={owner}")
+    roots, all_sup_pids, transient = _logical_supervisors()
+    check("exactly one logical supervisor", len(roots) == 1,
+          f"logical={roots} stable_pids={all_sup_pids} transient_spawns={transient}")
+
+    # ---- 2. state file ----------------------------------------------------
+    state: dict = {}
+    try:
+        state = json.loads(STATE.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        check("state file readable", False, repr(exc))
+    if state:
+        up, down = set(state.get("up", [])), set(state.get("down", []))
+        check("state partitions up/down", not (up & down), f"both={sorted(up & down)}")
+        check("state up list sorted", state.get("up") == sorted(up), "")
+        if hb_ts:
+            check("state not older than heartbeat", str(state.get("ts", "")) >= hb_ts,
+                  f"state={state.get('ts')} heartbeat={hb_ts}")
+
+    # ---- 3+4. every "up" service answers HTTP, one listener each ---------
+    up_services = state.get("up", [])
+    listeners = _listeners(set(PORT_OF_SERVICE.values()))
+    http_results: dict[str, dict] = {}
+    for svc in up_services:
+        port = PORT_OF_SERVICE.get(svc)
+        if port is None:
+            continue
+        res = _http(port, HTTP_PATHS.get(port, ("/",)))
+        http_results[svc] = res
+        check(f"http {svc} :{port}",
+              res["status"] is not None and 200 <= res["status"] < 500,
+              f"{res['status']} {res['path']} {res['ms']}ms")
+    # netstat prints one row per address family; the same pid twice is ONE listener.
+    dupes = {p: pids for p, pids in listeners.items() if len(set(pids)) > 1}
+    check("one listener per port", not dupes, json.dumps(dupes))
+
+    # ---- 5. gateway/brain step parity ------------------------------------
+    parity = None
+    try:
+        g = json.loads(http_results.get("abrasax-gateway", {}).get("body") or "{}")
+        if "steps" not in g:
+            g = json.loads(_http(9001, ("/brain/state",))["body"] or "{}")
+        b = json.loads(http_results.get("abrasax-brain", {}).get("body") or "{}")
+        if "steps" not in b:
+            b = json.loads(_http(9626, ("/state",))["body"] or "{}")
+        parity = {"gateway": g.get("steps"), "brain": b.get("steps")}
+        check("gateway steps == brain steps",
+              parity["gateway"] is not None and parity["gateway"] == parity["brain"],
+              json.dumps(parity))
+    except ValueError as exc:
+        check("gateway steps == brain steps", False, f"unparsable: {exc!r}")
+
+    # ---- known-absent services ------------------------------------------
+    for svc in state.get("down", []):
+        if svc not in KNOWN_ABSENT:
+            check(f"down {svc} is explained", False, "down with no proven external cause")
+    for svc, why in KNOWN_ABSENT.items():
+        if svc in state.get("down", []):
+            checks.append({"check": f"down {svc} explained", "ok": True, "detail": why})
+
+    failed = [c for c in checks if not c["ok"]]
+    return {
+        "ts": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "ok": not failed,
+        "checks": checks,
+        "failed": [c["check"] for c in failed],
+        "heartbeat": {"ts": hb_ts, "pid": hb_pid,
+                      "age_s": None if age is None else round(age, 1)},
+        "supervisor_pids": all_sup_pids,
+        "supervisor_logical": roots,
+        "state_ts": state.get("ts"),
+        "up": state.get("up", []),
+        "down": state.get("down", []),
+        "http": {k: {"status": v["status"], "path": v["path"], "ms": v["ms"]}
+                 for k, v in http_results.items()},
+        "parity": parity,
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--json", action="store_true")
+    args = ap.parse_args(argv)
+    rep = verify()
+    if args.json:
+        print(json.dumps(rep, indent=2))
+    else:
+        for c in rep["checks"]:
+            print(f"{'PASS' if c['ok'] else 'FAIL'}  {c['check']}"
+                  + (f"  [{c['detail']}]" if c["detail"] else ""))
+        print(f"\nSTACK RUN: {'OK' if rep['ok'] else 'FAIL'}  "
+              f"up={len(rep['up'])} down={len(rep['down'])} "
+              f"failed={len(rep['failed'])}")
+    return 0 if rep["ok"] else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

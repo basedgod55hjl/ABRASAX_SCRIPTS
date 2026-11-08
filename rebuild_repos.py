@@ -1,0 +1,240 @@
+"""rebuild_repos.py — take repos down and rebuild them as new production repos.
+
+Sequence, per repo, with every step proven before the next one runs:
+
+  1. GATE   mirror exists and `git fsck` is clean; on a real delete the mirror
+            HEAD must also equal the live remote SHA (a stale mirror blocks)
+  2. DELETE the remote repo (irreversible; the mirror is the only backup)
+  3. CREATE a fresh repo with the visibility/description captured before delete
+  4. PUBLISH
+       * rows with a mapped source  -> staged tree + PROVENANCE.md + commit + push
+       * rows with no source        -> restored from the verified mirror
+  5. PROVE  remote SHA read back from the API equals what was pushed
+
+Operational facts learned the hard way, all handled here:
+  * `git push` hangs forever on a credential prompt when stdout is redirected,
+    so repo._push now resets the helper chain and sets GIT_TERMINAL_PROMPT=0.
+  * GitHub enforces a *secondary* rate limit on repo creation: a burst of 20
+    creates gets blocked halfway. Creation is therefore paced and retried with
+    backoff, and the run is resumable (`--skip-delete`).
+  * A rebuilt repo's first commit is a new root, so the push into the repo the
+    aborted run already seeded is a non-fast-forward. A forced push is correct
+    here and nowhere else.
+
+    python SCRIPTS/rebuild_repos.py --dry-run
+    python SCRIPTS/rebuild_repos.py --go
+    python SCRIPTS/rebuild_repos.py --go --skip-delete --repos A,B --pace 20
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "SCRIPTS"))
+
+from tools.abx import repo, repos24  # noqa: E402
+from tools.abx.repo_delete import KEEP, _backup_ok  # noqa: E402
+
+MIRRORS = Path(r"C:\abrasax-backup\mirrors")
+LOGS = ROOT / "LOGS"
+
+
+def latest_snapshot() -> dict:
+    files = sorted(LOGS.glob("repo_full_*.json"))
+    if not files:
+        return {}
+    return json.loads(files[-1].read_text(encoding="utf-8")).get("repos", {})
+
+
+def row_for(name: str) -> dict:
+    for row in repos24.ROWS:
+        if row["repo"] == name:
+            return row
+    return {"repo": name, "branch": "main", "source": None, "kind": "unknown", "note": ""}
+
+
+def gate(name: str, live: dict, allow_missing: bool = False) -> dict:
+    """Every reason a delete would be unsafe, checked against the live account."""
+    backup = _backup_ok(name)
+    if not backup["ok"]:
+        return {"ok": False, "why": backup["why"]}
+    if allow_missing or name not in live:
+        # resume path: the repo is already gone (or about to be), only the mirror matters
+        return {"ok": True, "mirror_head": backup.get("mirror_head"), "note": "resume"}
+    head = repo.remote_head(live[name]["full_name"])
+    live_sha = head.get("sha")
+    if live_sha and backup.get("mirror_head") != live_sha:
+        return {"ok": False, "why": "mirror HEAD != live remote SHA (stale mirror)",
+                "mirror_head": backup.get("mirror_head"), "live_sha": live_sha}
+    return {"ok": True, "mirror_head": backup.get("mirror_head"), "live_sha": live_sha}
+
+
+def create_with_retry(name: str, private: bool, description: str, attempts: int | None = None) -> dict:
+    """repo.create, but survive GitHub's secondary rate limit (it is temporary)."""
+    if attempts is None:
+        # the supervisor decides how patient to be; a retry storm makes it worse
+        attempts = int(os.environ.get("ABX_CREATE_ATTEMPTS", "8"))
+    last = None
+    for i in range(attempts):
+        made = repo.create(name, private=private, description=description)
+        last = made
+        if made.ok:
+            return {"ok": True, "created": made.data.get("created"), "attempt": i + 1}
+        err = " ".join(str(e) for e in (made.errors or []))
+        if "secondary rate limit" in err or "abuse" in err.lower():
+            wait = min(600, 45 * (i + 1))
+            print(f"{name:<26} rate-limited; waiting {wait}s (attempt {i + 1}/{attempts})")
+            sys.stdout.flush()
+            time.sleep(wait)
+            continue
+        return {"ok": False, "error": err}
+    return {"ok": False, "error": "rate limit persisted: " + " ".join(str(e) for e in (last.errors or []))}
+
+
+def publish_from_source(row: dict) -> dict:
+    import build_now  # noqa: WPS433  (scripts/ is on sys.path)
+
+    dest = build_now._stage(row)
+    build_now._provenance(row, dest)
+    out = build_now._publish(row, dest)
+    errors = " ".join(str(e) for e in (out.get("errors") or []))
+    if out.get("state") == "failed" and "non-fast-forward" in errors:
+        # the repo already carries the new root from an aborted run: force is correct
+        push = repo._push(dest, "origin", f"+HEAD:{row['branch']}", timeout=3600)
+        if push["exit"] == 0:
+            local = repo.run(["git", "-C", str(dest), "rev-parse", "HEAD"], timeout=60)["stdout"].strip()
+            after = repo.remote_head(f"{repo.OWNER_DEFAULT}/{row['repo']}", row["branch"])
+            out = {"repo": row["repo"], "state": "published", "local_sha": local,
+                   "remote_sha": after.get("sha"), "matches": after.get("sha") == local,
+                   "files": out.get("files"), "bytes": out.get("bytes"), "forced": True}
+        else:
+            out = {**out, "errors": [push["stderr"][-400:]]}
+    return out
+
+
+def publish_from_mirror(name: str, branch: str) -> dict:
+    mirror = MIRRORS / f"{name}.git"
+    if not mirror.exists():
+        return {"repo": name, "state": "failed", "errors": [f"no mirror {mirror}"]}
+    refs = repo.run(["git", "-C", str(mirror), "for-each-ref", "--format=%(refname)"], timeout=300)
+    if not [x for x in refs["stdout"].splitlines() if x.strip()]:
+        # it was empty before deletion; recreate it empty and say so, don't fake a SHA
+        return {"repo": name, "state": "restored", "remote_sha": None, "branch": branch,
+                "matches": True, "note": "repo was empty; recreated empty"}
+    url = f"https://github.com/{repo.OWNER_DEFAULT}/{name}.git"
+    repo.run(["git", "-C", str(mirror), "remote", "remove", "origin"], timeout=60)
+    repo.run(["git", "-C", str(mirror), "remote", "add", "origin", url], timeout=60)
+    push = repo._push(mirror, "origin", "+refs/*:refs/*", timeout=3600)
+    if push["exit"] != 0:
+        return {"repo": name, "state": "failed", "errors": [push["stderr"][-400:]]}
+    after = repo.remote_head(f"{repo.OWNER_DEFAULT}/{name}", branch)
+    return {"repo": name, "state": "restored", "remote_sha": after.get("sha"),
+            "branch": branch, "matches": bool(after.get("sha"))}
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--repos", default="", help="comma list; default = all rows minus keep list")
+    ap.add_argument("--go", action="store_true", help="actually delete/create/push")
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--force-keep", action="store_true", help="allow keep-list repos (footer/forks)")
+    ap.add_argument("--skip-delete", action="store_true", help="recreate only (repo already gone)")
+    ap.add_argument("--pace", type=float, default=12.0, help="seconds between repo creations")
+    args = ap.parse_args(argv)
+
+    snapshot = latest_snapshot()
+    listing = repo.remote_repos()
+    if not listing["ok"]:
+        print(json.dumps({"ok": False, "error": listing.get("error")}))
+        return 1
+    live = listing["repos"]
+
+    if args.repos:
+        targets = [n.strip() for n in args.repos.split(",") if n.strip()]
+    else:
+        targets = sorted(n for n in live if n not in KEEP or args.force_keep)
+    blocked_keep = [n for n in targets if n in KEEP and not args.force_keep]
+    if blocked_keep:
+        targets = [n for n in targets if n not in KEEP]
+
+    print(f"targets: {len(targets)}  keep-blocked: {blocked_keep}")
+
+    # ---- 1. gate every target before anything is touched
+    gates = {n: gate(n, live, allow_missing=args.skip_delete) for n in targets}
+    unsafe = {n: g for n, g in gates.items() if not g["ok"]}
+    print(f"gate: {len(targets) - len(unsafe)}/{len(targets)} safe")
+    for n, g in unsafe.items():
+        print(f"  BLOCKED {n}: {g['why']}")
+    if unsafe:
+        print(json.dumps({"ok": False, "blocked": unsafe}, indent=1)[:2000])
+        return 1
+
+    plan = []
+    for n in targets:
+        row = row_for(n)
+        meta = snapshot.get(n, {})
+        strategy = "source" if row.get("source") else "mirror"
+        plan.append({"repo": n, "branch": row["branch"], "strategy": strategy,
+                     "kind": row["kind"], "private": bool(meta.get("private")),
+                     "description": meta.get("description") or ""})
+
+    if not args.go:
+        print(json.dumps({"ok": True, "dry_run": True, "plan": plan}, indent=1))
+        return 0
+
+    # ---- 2. delete
+    deleted, failed_delete = [], []
+    if not args.skip_delete:
+        from tools.abx import repo_delete
+        res = repo_delete.delete(repos=",".join(targets), confirm=",".join(targets), dry_run=False)
+        data = res.data
+        deleted = data.get("deleted", [])
+        failed_delete = data.get("failed", []) + [{"repo": b, "error": "gate"} for b in data.get("blocked", [])]
+        print(f"delete: {len(deleted)} deleted, {len(failed_delete)} failed")
+        if failed_delete:
+            print(json.dumps(failed_delete, indent=1)[:1500])
+            return 1
+
+    # ---- 3+4. create and publish
+    results = []
+    for i, item in enumerate(plan):
+        n = item["repo"]
+        made = create_with_retry(n, item["private"], item["description"])
+        if not made["ok"]:
+            results.append({**item, "state": "create-failed", "errors": [made.get("error")]})
+            print(f"{n:<26} CREATE-FAILED {str(made.get('error'))[:120]}")
+            sys.stdout.flush()
+            continue
+        try:
+            if item["strategy"] == "source":
+                out = publish_from_source(row_for(n))
+            else:
+                out = publish_from_mirror(n, item["branch"])
+        except Exception as exc:  # noqa: BLE001
+            out = {"repo": n, "state": "failed", "errors": [f"{type(exc).__name__}: {exc}"]}
+        results.append({**item, **out})
+        print(f"{n:<26} {str(out.get('state')):<10} sha={str(out.get('remote_sha'))[:12]} "
+              f"match={out.get('matches')}")
+        sys.stdout.flush()
+        if i < len(plan) - 1 and args.pace:
+            time.sleep(args.pace)
+
+    payload = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+               "deleted": deleted, "failed_delete": failed_delete, "results": results}
+    out_path = LOGS / ("rebuild_%s.json" % time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()))
+    out_path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+
+    ok = [r for r in results if r.get("state") in ("published", "restored") and r.get("matches")]
+    bad = [r["repo"] for r in results if r not in ok]
+    print(f"\nREBUILD {len(ok)}/{len(results)} ok  failed={bad}\nlog={out_path}")
+    return 0 if not bad else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,60 @@
+"""Why does dsp_ippv2's arch slice not start with a Mach-O magic?
+
+Fat header says one slice at some offset, but the bytes there are 0x00000000.
+Possibilities:
+  a) the file is a thin Mach-O whose first 4 bytes only LOOK like fat magic
+  b) the fat arch entry is 64-bit (FAT_MAGIC_64 = 0xCAFEBABF) and we misread
+  c) the slice offset points into padding and the real image starts later
+  d) the container is not Mach-O at all beyond the header
+
+Dump the actual header bytes and every plausible magic location, then decide.
+"""
+from __future__ import annotations
+
+import struct
+from pathlib import Path
+
+P = Path(r"C:\Users\sirch\_WORK\fl_unpack\Library\Audio\Plug-Ins\VST"
+         r"\FL Studio VSTi.vst\Contents\Resources\Shared\dsp_ippv2_x64.dylib")
+
+with P.open("rb") as fh:
+    head = fh.read(64)
+    print("first 64 bytes:")
+    for i in range(0, 64, 16):
+        chunk = head[i:i + 16]
+        print(f"  {i:04x}  {chunk.hex(' ')}  " +
+              "".join(chr(b) if 32 <= b < 127 else "." for b in chunk))
+
+    magic_be = struct.unpack(">I", head[:4])[0]
+    print(f"\nfirst u32 BE: {magic_be:#010x}")
+    print(f"  FAT_MAGIC    ({0xCAFEBABE:#x})? {magic_be == 0xCAFEBABE}")
+    print(f"  FAT_MAGIC_64 ({0xCAFEBABF:#x})? {magic_be == 0xCAFEBABF}")
+
+    n = struct.unpack(">I", fh.read(4))[0]
+    print(f"\nfat_arch count: {n}")
+    for i in range(n):
+        entry = fh.read(20)
+        if len(entry) < 20:
+            break
+        cputype, cpusub, offset, size, align = struct.unpack(">iiIII", entry)
+        print(f"  slice {i}: cputype={cputype:#x} sub={cpusub} "
+              f"offset={offset:,} size={size:,} align=2^{align}")
+        cur = fh.tell()
+        for probe in (offset, offset + 0x1000, offset + 0x4000):
+            fh.seek(probe)
+            m = fh.read(4)
+            if len(m) == 4:
+                v = struct.unpack("<I", m)[0]
+                tag = {0xFEEDFACF: "MH_MAGIC_64", 0xFEEDFACE: "MH_MAGIC_32",
+                       0xCAFEBABE: "FAT again"}.get(v, "?")
+                print(f"    @{probe:>12,}: {m.hex(' ')} -> {v:#010x} {tag}")
+        fh.seek(cur)
+
+    # is there ANY Mach-O magic anywhere in the first 1 MB?
+    fh.seek(0)
+    blob = fh.read(1 << 20)
+    print("\nscan first 1 MiB for Mach-O magics:")
+    for magic, label in ((b"\xcf\xfa\xed\xfe", "MH_MAGIC_64 LE"),
+                         (b"\xce\xfa\xed\xfe", "MH_MAGIC_32 LE")):
+        idx = blob.find(magic)
+        print(f"  {label}: {'at ' + hex(idx) if idx >= 0 else 'not found'}")

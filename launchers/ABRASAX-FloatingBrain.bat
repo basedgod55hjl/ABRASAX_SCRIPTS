@@ -1,0 +1,210 @@
+@echo off
+REM ===========================================================================
+REM  ABRASAX - FLOATING BRAIN                                desktop launcher
+REM ---------------------------------------------------------------------------
+REM  Starts the native Dear ImGui overlay that draws the live GPU brain field
+REM  from http://127.0.0.1:9700. No browser, no WebView, no HTTP page.
+REM
+REM  Usage
+REM    double-click                start (refuses if one is already running)
+REM    ABRASAX-FloatingBrain.bat status      instances + renderer probe, exit
+REM    ABRASAX-FloatingBrain.bat stop        stop every overlay instance
+REM    ABRASAX-FloatingBrain.bat restart     stop, then start
+REM    ... --width 900 --height 900 --fps 30   any imgui_overlay.py flag passes
+REM
+REM  Keep this window open while the overlay runs: closing it closes the
+REM  overlay, because the overlay is its child. Press Esc in the overlay (or
+REM  use "stop") to exit cleanly.
+REM
+REM  Log   %ROOT%\LOGS\floating-brain-<timestamp>.log          (launcher: start/exit/rc)
+REM        %ROOT%\LOGS\floating-brain-<timestamp>.stream.log   (overlay stdout/stderr)
+REM  Code  0 clean   2 precondition   4 crashed 3 times
+REM ===========================================================================
+setlocal EnableExtensions EnableDelayedExpansion
+
+set "ROOT=%ABRASAX_ROOT%"
+if not defined ROOT set "ROOT=C:\ABRASAX"
+
+set "PY=%ROOT%\PYTHON\.venv_gui\Scripts\python.exe"
+set "OVERLAY=%ROOT%\ENGINE\floating_brain\imgui_overlay.py"
+set "CTL=%ROOT%\SCRIPTS\automation\overlay_ctl.py"
+set "LOGDIR=%ROOT%\LOGS"
+set "MAXTRIES=3"
+set "FORCE=0"
+
+title ABRASAX - FLOATING BRAIN
+echo.
+echo   ABRASAX - FLOATING BRAIN
+echo   native Dear ImGui overlay  ^|  renderer :9700
+echo   ------------------------------------------------------------------
+echo.
+
+if /i "%~1"=="status"  goto :do_status
+if /i "%~1"=="stop"    goto :do_stop
+if /i "%~1"=="help"    goto :do_help
+if /i "%~1"=="-h"      goto :do_help
+if /i "%~1"=="--help"  goto :do_help
+if /i "%~1"=="restart" (
+    shift
+    set "FORCE=1"
+)
+
+:start
+REM ---- preconditions ------------------------------------------------------
+if not exist "%PY%"      goto :no_python
+if not exist "%OVERLAY%" goto :no_overlay
+if not exist "%CTL%"     goto :no_ctl
+if not exist "%LOGDIR%"  mkdir "%LOGDIR%" 2>nul
+
+REM A previous "stop" leaves a marker so this supervised loop does not fight it.
+REM Clearing it here means a stop never blocks a later start.
+del "%LOGDIR%\.floating-brain.stop" >nul 2>&1
+
+REM ---- timestamped log ----------------------------------------------------
+set "TS="
+for /f "usebackq delims=" %%t in (`powershell -NoProfile -NonInteractive -Command "Get-Date -Format yyyyMMdd-HHmmss"`) do set "TS=%%t"
+if not defined TS set "TS=%RANDOM%"
+set "LOG=%LOGDIR%\floating-brain-%TS%.log"
+set "STREAM=%LOGDIR%\floating-brain-%TS%.stream.log"
+
+REM ---- single-instance guard ---------------------------------------------
+if "%FORCE%"=="0" (
+    "%PY%" "%CTL%" quiet
+    if not errorlevel 1 goto :already
+)
+
+REM ---- arguments ---------------------------------------------------------
+set "ARGS="
+if not "%~1"=="" set "ARGS=%1 %2 %3 %4 %5 %6 %7 %8 %9"
+if not defined ARGS set "ARGS=--width 760 --height 760 --topmost"
+
+REM ---- renderer check (informational; the overlay waits for it) ----------
+"%PY%" "%CTL%" probe >nul 2>&1
+if errorlevel 1 (
+    echo   [warn] renderer :9700 is not answering right now.
+    echo          The overlay will show "waiting for renderer" until it is up.
+    echo.
+)
+
+echo   root     %ROOT%
+echo   overlay  %OVERLAY%
+echo   args     !ARGS!
+echo   log      %LOG%
+echo   output   %STREAM%
+echo.
+echo   Starting. Close this window (or press Esc in the overlay) to stop.
+
+>>"%LOG%" echo ===========================================================================
+>>"%LOG%" echo  ABRASAX floating brain   started %DATE% %TIME%
+>>"%LOG%" echo  root    %ROOT%
+>>"%LOG%" echo  overlay %OVERLAY%
+>>"%LOG%" echo  args    !ARGS!
+>>"%LOG%" echo ===========================================================================
+
+set /a tries=0
+:run
+set /a tries+=1
+>>"%LOG%" echo.
+>>"%LOG%" echo --- run !tries! started %TIME% ---
+REM THE CHILD MUST NOT WRITE TO %LOG%. Measured: when the launcher and python
+REM append to one file through separate handles, the child's buffered output
+REM lands on top of the launcher's lines, and "--- run N exited rc=N ---"
+REM silently disappears -- exactly the line needed to explain a crash. Two
+REM files, one writer each.
+"%PY%" -u "%OVERLAY%" !ARGS! >>"%STREAM%" 2>&1
+set "RC=!ERRORLEVEL!"
+>>"%LOG%" echo --- run !tries! exited rc=!RC! at %TIME% ---
+
+REM "overlay_ctl.py stop" kills python, which looks exactly like a crash. The
+REM marker distinguishes an intentional stop from a real failure, so the
+REM watchdog does not resurrect a window the user just closed.
+if exist "%LOGDIR%\.floating-brain.stop" goto :stopped
+
+if "!RC!"=="0" goto :closed
+if !tries! GEQ %MAXTRIES% goto :crashed
+echo   [warn] overlay exited rc=!RC!, restarting in 2s (attempt !tries!/%MAXTRIES%)
+ping -n 3 127.0.0.1 >nul
+goto :run
+
+:closed
+>>"%LOG%" echo closed cleanly
+echo.
+echo   Overlay closed cleanly.
+echo   log: %LOG%
+endlocal & exit /b 0
+
+:stopped
+>>"%LOG%" echo stopped on request (marker present); not restarting
+echo.
+echo   Overlay stopped on request.
+echo   log: %LOG%
+endlocal & exit /b 0
+
+:crashed
+echo.
+echo   [error] the overlay exited with rc=!RC! three times. Not restarting.
+echo   log: %LOG%
+echo.
+echo   last 20 log lines:
+powershell -NoProfile -NonInteractive -Command "Get-Content -LiteralPath '%LOG%' -Tail 20"
+echo.
+echo   last 20 output lines:
+powershell -NoProfile -NonInteractive -Command "if (Test-Path -LiteralPath '%STREAM%') { Get-Content -LiteralPath '%STREAM%' -Tail 20 } else { 'no output captured' }"
+echo.
+call :hold 30
+endlocal & exit /b 4
+
+:already
+echo   Already running - not opening a second window.
+"%PY%" -u "%CTL%" status
+echo.
+echo   "%~nx0" restart   replace it
+echo   "%~nx0" stop      close it
+endlocal & exit /b 0
+
+:do_status
+"%PY%" -u "%CTL%" status
+endlocal & exit /b 0
+
+:do_stop
+"%PY%" -u "%CTL%" stop
+endlocal & exit /b 0
+
+:do_help
+echo   ABRASAX-FloatingBrain.bat  [status ^| stop ^| restart ^| help]  [overlay args]
+echo.
+echo     (no argument)   start the overlay, one instance only
+echo     status          list instances and probe the renderer
+echo     stop            stop every overlay instance
+echo     restart         stop then start
+echo.
+echo   Passed through to imgui_overlay.py:
+echo     --width N --height N --opacity F --fps F --borderless --no-topmost
+endlocal & exit /b 0
+
+:no_python
+echo   [error] python not found:
+echo           %PY%
+echo   This launcher expects the ABRASAX venv. If the project is not at
+echo   C:\ABRASAX, set ABRASAX_ROOT before running it.
+call :hold 40
+endlocal & exit /b 2
+
+:no_overlay
+echo   [error] overlay script not found:
+echo           %OVERLAY%
+call :hold 40
+endlocal & exit /b 2
+
+:no_ctl
+echo   [error] control script not found:
+echo           %CTL%
+call :hold 40
+endlocal & exit /b 2
+
+:hold
+REM `pause` needs a console and `timeout` fails without one (measured in this
+REM repo: timeout /t 1, >nul and /nobreak all return rc=1 headless). A plain
+REM sleep keeps the message on screen for a human without blocking forever.
+powershell -NoProfile -NonInteractive -Command "Start-Sleep -Seconds %~1" >nul 2>&1
+exit /b 0

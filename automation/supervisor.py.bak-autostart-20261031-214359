@@ -1,0 +1,566 @@
+"""ABRASAX supervisor — 30s automation loop.
+
+Every tick:
+  1. probe every service in abrasax.services (parallel TCP, 0.6s)
+  2. auto-start any down service on the AUTOSTART allowlist (cooldown 180s)
+  3. integrity-check the root tree (expected dirs / key files)
+  4. append a ledger event + rewrite state + heartbeat
+
+Usage:
+    python supervisor.py                # resident, 30s ticks
+    python supervisor.py --once        # single tick (debug)
+    python supervisor.py --dry-run     # probe + integrity only, never start
+    python supervisor.py --interval 30 # custom tick seconds
+
+The resident run is idempotent: a PID lock in LOGS/supervisor.pid keeps a
+second instance from starting (safe to relaunch from the watchdog task).
+"""
+from __future__ import annotations
+
+import argparse
+import ctypes
+import datetime as dt
+import json
+import os
+import shutil
+import socket
+import subprocess
+import threading
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(os.environ.get("ABRASAX_ROOT") or Path(__file__).resolve().parents[2])
+_IMG_ROOT = Path(os.environ.get("ABRASAX_IMG_ROOT") or (ROOT / "TOOLS" / "AI-ImageGen"))
+_IMG_PY = _IMG_ROOT / "Data" / "Packages" / "ComfyUI" / "venv" / "Scripts" / "python.exe"
+_LLAMA_HOME = ROOT / "BUILD" / "llamacpp" / "build" / "bin"
+_LLAMA = _LLAMA_HOME / "llama-server.exe"
+# Was hard-coded to C:\Users\sirch\... - there is no `sirch` user on this host
+# (verified 2026-11-01: `if exist C:\Users\sirch` -> NO SIRCH USER). The service
+# therefore launched a model path that could never exist and flapped on the 180 s
+# cooldown. Resolve per-user, and let an explicit override win.
+def _llama_model() -> Path:
+    override = os.environ.get("ABRASAX_LLAMA_MODEL")
+    if override:
+        return Path(override)
+    candidates = [
+        Path.home() / ".lmstudio" / "models" / "lmstudio-community"
+        / "LFM2.5-1.2B-Instruct-GGUF" / "LFM2.5-1.2B-Instruct-Q6_K.gguf",
+        ROOT / "MODELS" / "gguf" / "LFM2.5-1.2B-Instruct-Q6_K.gguf",
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    return candidates[0]
+
+
+_LLAMA_MODEL = _llama_model()
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from abrasax import services  # noqa: E402
+
+LOGS = ROOT / "LOGS"
+LEDGER = LOGS / "supervisor-ledger.jsonl"
+STATE = LOGS / "supervisor-state.json"
+HEARTBEAT = LOGS / "supervisor-heartbeat.txt"
+PIDFILE = LOGS / "supervisor.pid"
+
+EXPECTED_DIRS = [
+    "AGENTS", "APPS", "ARCHIVE", "CONFIG", "CORE", "DATA", "DOC", "ENGINE",
+    "GATEWAY", "LOGS", "MCP", "MODELS", "PROJECTS", "PYTHON", "RUST",
+    "SCRIPTS", "SEEDS", "SOURCE", "SYSTEMS", "TESTS", "TOOLS", "TYPESCRIPT",
+    "UI", "VENDORS", "_VAULT",
+]
+EXPECTED_FILES = [
+    ".env", "pyproject.toml", "abrasax/__init__.py", "abrasax/gateway.py",
+    "AGENTS/ROLES/registry.json", "CONFIG/llm/providers.json",
+    "ENGINE/abrasax_engine/__init__.py",
+]
+
+_SUB = ROOT / "TOOLS" / "source-tools" / "subsystems"
+_NODE = shutil.which("node") or "node"
+_DOTNET = shutil.which("dotnet") or "dotnet"
+
+
+def _codec_cmd() -> list[str]:
+    """Run the built DLL through the dotnet host.
+
+    The native apphost (codec_gateway.exe) inherits the Low mandatory integrity label of
+    TOOLS/source-tools, so HTTP.sys rejects its HttpListener session (error 6). `dotnet <dll>`
+    runs from the user profile and binds fine. Prefer Release, then Debug, then apphost.
+    """
+    for cfg in ("Release", "Debug"):
+        for dll in (_SUB / "codec_gateway" / "bin" / cfg).glob("*/codec_gateway.dll"):
+            return [_DOTNET, str(dll)]
+    for exe in (_SUB / "codec_gateway" / "bin").glob("**/codec_gateway.exe"):
+        return [str(exe)]
+    return [_DOTNET, "run", "--no-build"]
+
+
+_FB_BIN = ROOT / "ENGINE" / "floating_brain" / "cuda" / "bin"
+
+AUTOSTART: dict[str, dict] = {
+    "floating-brain": {
+        # The GPU renderer that the ImGui overlay and the Unity client consume.
+        # Measured 2026-10-18: it died during a test run and nothing noticed,
+        # because it was in neither SERVICES nor AUTOSTART. Port bind is the
+        # mutex, so no pid file is needed.
+        "cmd": [str(_FB_BIN / "fb_server.exe"), "9700", "fb_kernels.cubin",
+                "index.html"],
+        "cwd": _FB_BIN,
+    },
+    "abrasax-gateway": {
+        "cmd": [sys.executable, "-m", "abrasax", "gateway", "--port", "9001"],
+        "cwd": ROOT,
+    },
+    "node-lm": {
+        "cmd": [_NODE, "server.mjs"],
+        "cwd": _SUB / "node_lm_server",
+    },
+    "filetool": {
+        "cmd": [sys.executable, "filetool.py"],
+        "cwd": _SUB / "filetool",
+    },
+    "abrasax-brain": {
+        "cmd": [sys.executable, "-m", "abrasax.brain", "serve", "--port", "9626"],
+        "cwd": ROOT,
+    },
+    "jev-brain-bridge": {
+        # Feeds LOGS/brain_state.json for the overlay. No socket to probe, so
+        # liveness is judged by the "heartbeat" field it writes each cycle.
+        "cmd": [sys.executable, "-u", "C:/abrasax/tools/brain_state_writer.py"],  # the ONE writer
+        "cwd": ROOT,  # writer resolves absolute paths
+    },
+    "floating-brain-overlay": {
+        # The HUD itself. It exposes /health on 9627 precisely so this watchdog
+        # can see it: measured 2026-10-18 it was dying with nobody noticing
+        # because supervisor.tick() skips any service without a port.
+        "cmd": [sys.executable, "ENGINE/floating_brain/imgui_overlay.py",
+                "--width", "760", "--height", "760", "--topmost",
+                "--borderless"],
+        "cwd": ROOT,
+    },
+    "abrasax-ui": {
+        "cmd": [sys.executable, "-m", "http.server", "8090", "--bind", "127.0.0.1"],
+        "cwd": ROOT / "UI" / "abrasax-ui" / "web",
+    },
+    "cellbrain": {
+        "cmd": [sys.executable, "abraxas_cellbrain.py", "--serve", "--port", "9624",
+                "--autoloop", "5", "--reciprocal"],
+        "cwd": _SUB / ".." / "brains",
+    },
+    "synaptic-brain": {
+        "cmd": [sys.executable, "abraxas_synaptic_server.py", "--serve", "--port", "9625",
+                "--autoloop", "5", "--resume"],
+        "cwd": _SUB / ".." / "brains",
+    },
+    "routerfail": {
+        "cmd": [sys.executable, "routerfail.py"],
+        "cwd": _SUB / "routerfail",
+    },
+    "llamacpp-local": {
+        # Preflight: neither the binary nor the model may be a stub/absent. On
+        # 2026-11-01 the binary was a 10,752-byte stub (imports llama-server-impl.dll,
+        # which is NOT in BUILD/llamacpp/build/bin) and the model path named a
+        # nonexistent user, so every start failed after burning the cooldown.
+        "requires": [str(_LLAMA), str(_LLAMA_MODEL)],
+        "cmd": [_LLAMA, "--model", _LLAMA_MODEL, "--port", "8083",
+                "--host", "127.0.0.1", "-ngl", "99", "-c", "4096"],
+        "cwd": _LLAMA_HOME,
+    },
+    "imagegen": {
+        "cmd": [_IMG_PY, str(_IMG_ROOT / "scripts" / "imagegen_server.py")],
+        "cwd": _IMG_ROOT,
+    },
+    "harvest-helper": {
+        "cmd": [_NODE, "server.js"],
+        "cwd": _SUB / "media-grabber" / "helper",
+    },
+    "codec-gateway": {
+        "cmd": _codec_cmd(),
+        "cwd": _SUB / "codec_gateway",
+    },
+}
+
+# --- single brain-state writer mutex -----------------------------------------
+# LOGS/brain_state.json has exactly one writer: tools/brain_state_writer.py.
+# tools/brain_state.py and ENGINE/floating_brain/jev_brain_state.py are retired
+# and emit different schemas (no heartbeat / no embed_ok), which made the
+# overlay's input go stale whenever one of them ran. Verified defect: three
+# writers, one file, and a fail in test_overlay_jev_wiring at age=71.3s.
+_RETIRED_WRITERS = ("tools/brain_state.py",
+                     "tools\\brain_state.py",
+                     "floating_brain/jev_brain_state.py",
+                     "floating_brain\\jev_brain_state.py")
+_CANONICAL_WRITER = "brain_state_writer.py"
+
+
+def _writer_procs() -> list[tuple[int, str]]:
+    """(pid, cmdline) for every python process running a brain-state writer."""
+    try:
+        import psutil
+    except Exception:            # noqa: BLE001 - keep the tick loop alive
+        return []
+    out = []
+    for p in psutil.process_iter(["pid", "cmdline", "exe"]):
+        cmd = " ".join(p.info["cmdline"] or [])
+        if not (_CANONICAL_WRITER in cmd or
+                any(w in cmd for w in _RETIRED_WRITERS)):
+            continue
+        try:
+            # three writers on this host are venv SHIMS that re-exec the real
+            # interpreter as a CHILD (pid A's cmdline is the writer; its child B's
+            # cmdline also names the writer but B does the work). Killing the
+            # parent leaves B orphaned and still writing. Keep the whole tree.
+            proc = psutil.Process(p.info["pid"])
+            kids = proc.children(recursive=True)
+        except Exception:        # noqa: BLE001
+            kids = []
+        out.append({"pid": p.info["pid"], "cmd": cmd,
+                    "kids": [(k.pid, " ".join(k.cmdline() or [])) for k in kids]})
+    return out
+
+
+def enforce_single_writer() -> dict:
+    """Kill retired writers, keep exactly one canonical writer alive."""
+    procs = _writer_procs()
+    killed = []
+    import psutil
+    for rec in procs:
+        if _CANONICAL_WRITER in rec["cmd"]:
+            continue
+        for kid_pid, _kid_cmd in rec["kids"]:
+            try:
+                psutil.Process(kid_pid).kill()
+                killed.append(kid_pid)
+            except Exception:    # noqa: BLE001
+                pass
+        try:
+            psutil.Process(rec["pid"]).kill()
+            killed.append(rec["pid"])
+        except Exception:        # noqa: BLE001
+            pass
+    alive = [p for p in procs
+             if _CANONICAL_WRITER in p["cmd"] and p["pid"] not in killed]
+    started = None
+    if not alive:
+        res = _start_service("brain_state_writer", {
+            "cmd": [sys.executable, "-u", str(ROOT / "tools" / _CANONICAL_WRITER)],
+            "cwd": ROOT,
+        })
+        started = res.get("pid") or res.get("error")
+    if killed or started:
+        _ledger({"event": "writer_mutex", "killed": killed, "started": started})
+    return {"killed": killed, "started": started, "alive": len(alive),
+            "retired_seen": [r["pid"] for r in procs
+                             if _CANONICAL_WRITER not in r["cmd"]]}
+
+COOLDOWN_S = 180
+_last_start: dict[str, float] = {}
+
+
+def _now() -> str:
+    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)
+        if not handle:
+            return False
+        ctypes.windll.kernel32.CloseHandle(handle)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _rotate(path: Path, limit: int = 5 * 1024 * 1024) -> None:
+    try:
+        if path.exists() and path.stat().st_size > limit:
+            old = path.with_suffix(path.suffix + ".1")
+            if old.exists():
+                old.unlink()
+            path.rename(old)
+    except OSError:
+        pass
+
+
+def _ledger(event: dict) -> None:
+    try:
+        LOGS.mkdir(parents=True, exist_ok=True)
+        _rotate(LEDGER)
+        with LEDGER.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"ts": _now(), **event}, default=str) + "\n")
+    except OSError:
+        pass
+
+
+def _preflight(spec: dict) -> dict | None:
+    """Refuse to launch a service whose declared prerequisites are absent.
+
+    A missing binary or model used to be launched anyway, fail instantly, and
+    burn the whole 180 s cooldown on every tick - the "flapping" seen for
+    llamacpp-local on 2026-11-01. Returning a reason here makes that visible
+    instead of silent.
+    """
+    for req in spec.get("requires") or []:
+        if not Path(req).exists():
+            return {"error": f"missing prerequisite: {req}", "blocked": True}
+
+    # Existence is not enough. On 2026-11-01 BUILD/llamacpp/build/bin/llama-server.exe
+    # existed as a 10,752-byte stub whose import llama-server-impl.dll was absent from
+    # that directory; it died with 0xC0000135 (STATUS_DLL_NOT_FOUND) in ~40 ms, so the
+    # supervisor "started" it, saw it down next tick, and burned the 180 s cooldown for
+    # ever. A binary that cannot survive its own startup is a blocked prerequisite.
+    exe = spec.get("cmd") or []
+    if exe and str(exe[0]).lower().endswith(".exe"):
+        target = Path(exe[0])
+        if not target.exists():
+            # Report the flag that is actually wrong. imagegen's entry names
+            # Data/Packages/ComfyUI/venv/Scripts/python.exe, which does not exist
+            # on this machine; calling that "python.exe missing" is misleading.
+            return {"error": f"missing executable: {target}", "blocked": True}
+        why = _exe_unrunnable(target)
+        if why:
+            return {"error": f"unrunnable binary: {target.name} ({why})",
+                    "blocked": True}
+    return None
+
+
+_EXE_PROBE_TTL_S = 600.0
+_exe_probe_cache: dict[str, tuple[float, str | None]] = {}
+
+
+def _exe_unrunnable(path: Path) -> str | None:
+    """Return a short reason if `path` cannot run, else None.
+
+    Probes once and caches for _EXE_PROBE_TTL_S: a Windows process that exits
+    non-zero within a couple of seconds, with no stdout, is treated as broken.
+    Only used for services that name a literal .exe.
+    """
+    import subprocess as _sp
+    key = str(path).lower()
+    now = time.time()
+    hit = _exe_probe_cache.get(key)
+    if hit and now - hit[0] < _EXE_PROBE_TTL_S:
+        return hit[1]
+    reason = None
+    try:
+        cp = _sp.run([str(path), "--version"], cwd=str(path.parent),
+                     capture_output=True, timeout=8)
+        # llama.cpp writes its banner to STDERR ("version: 0.7.0-dev"), so
+        # checking stdout alone reported a healthy binary as broken. Measured
+        # 2026-11-01: that false block kept :8083 disabled even though the
+        # service serves real completions at ~130 tok/s.
+        spoke = bool((cp.stdout or b"").strip() or (cp.stderr or b"").strip())
+        if cp.returncode != 0 and not spoke:
+            reason = "exit 0x%08X" % (cp.returncode & 0xFFFFFFFF)
+    except _sp.TimeoutExpired:
+        reason = None                      # slow but alive: not our call to block
+    except OSError as exc:
+        reason = exc.__class__.__name__
+    except Exception:
+        reason = None
+    _exe_probe_cache[key] = (now, reason)
+    return reason
+
+
+def _start_service(service_id: str, spec: dict) -> dict:
+    blocked = _preflight(spec)
+    if blocked:
+        return blocked
+    cwd = Path(spec["cwd"])
+    log_path = LOGS / f"svc-{service_id}.log"
+    try:
+        LOGS.mkdir(parents=True, exist_ok=True)
+        out = open(log_path, "ab")  # noqa: SIM115 - child keeps the handle
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | \
+            getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        proc = subprocess.Popen(
+            spec["cmd"], cwd=str(cwd), stdout=out, stderr=out,
+            stdin=subprocess.DEVNULL, creationflags=flags, close_fds=True,
+        )
+        return {"pid": proc.pid, "cmd": spec["cmd"], "cwd": str(cwd)}
+    except Exception as exc:  # noqa: BLE001
+        return {"error": repr(exc)}
+
+
+def integrity() -> dict:
+    missing_dirs = [d for d in EXPECTED_DIRS if not (ROOT / d).is_dir()]
+    missing_files = [f for f in EXPECTED_FILES if not (ROOT / f).exists()]
+    return {"missing_dirs": missing_dirs, "missing_files": missing_files,
+            "ok": not missing_dirs and not missing_files}
+
+
+def _port_open(port: int, timeout: float = 0.4) -> bool:
+    """True when something accepts TCP on the port.
+
+    The health probe is HTTP with a 0.6 s budget; a service that is listening but
+    slow to answer used to be classified 'down' and a second instance was spawned
+    after the cooldown (SO_REUSEADDR then allowed both to bind). This guard makes
+    'a listener exists' sufficient reason not to start another one.
+
+    Measured 2026-11-01: `socket.create_connection(..., timeout=1.2)` blocked the
+    supervisor loop indefinitely (main thread parked in socket.py:836 from here,
+    zero CPU, heartbeat frozen). The socket timeout does not reliably interrupt a
+    connect() on this host, so the call is driven on a daemon thread and given a
+    hard wall. A stuck connect can then only strand its own thread - which is
+    daemonised precisely so it can never keep the supervisor alive or block it.
+    """
+    deadline = float(timeout)
+    result = {"open": False}
+
+    def _connect() -> None:
+        s = None
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(deadline)
+            s.connect(("127.0.0.1", int(port)))
+            result["open"] = True
+        except OSError:
+            pass
+        finally:
+            if s is not None:
+                try:
+                    s.close()
+                except OSError:
+                    pass
+
+    t = threading.Thread(target=_connect, name=f"portprobe-{port}", daemon=True)
+    t.start()
+    # Small slack on top of the socket timeout; never return before the probe
+    # has had its full budget, never wait meaningfully longer than that.
+    t.join(deadline + 0.8)
+    return result["open"]
+
+
+def tick(interval: int, dry_run: bool = False, quiet: bool = False) -> dict:
+    # 0.6 s was measured as too tight on this host: with the GPU busy the brain and
+    # UI legitimately take several seconds to answer, the tick declared them down and
+    # started duplicates (21 brain listeners once). Two seconds still catches a real
+    # hang, and the 6 s retry below keeps a slow-but-alive service out of the restart path.
+    # the ONE writer of LOGS/brain_state.json: kill retired writers, restart
+    # the canonical one if dead. A writer problem must never kill the tick.
+    try:
+        _wm = enforce_single_writer()
+    except Exception:  # noqa: BLE001
+        _wm = None
+    rows = services.health(timeout=2.0)
+    ts = _now()
+    events: list[dict] = []
+    started: list[str] = []
+
+    for row in rows:
+        sid = row["id"]
+        if row.get("port") is None:
+            continue
+        if row.get("up"):
+            events.append({"svc": sid, "state": "up",
+                           "ms": row.get("latency_ms")})
+            continue
+        events.append({"svc": sid, "state": "down"})
+        if _port_open(row["port"], 1.2):
+            # listener exists, health endpoint was merely slow
+            events.append({"svc": sid, "state": "up", "note": "port-live"})
+            continue
+        # Second opinion with a generous budget: a busy service can miss the
+        # 0.6 s probe while still being alive. Observed 2026-10-24: abrasax-brain
+        # was restarted at 10:47 after one timed-out probe and both listeners
+        # then shared :9626 under SO_REUSEADDR.
+        try:
+            again = [r for r in services.health(timeout=6.0) if r.get("id") == sid]
+        except Exception:
+            again = []
+        if again and again[0].get("up"):
+            events.append({"svc": sid, "state": "up", "note": "slow-health"})
+            continue
+        spec = AUTOSTART.get(sid)
+        if not spec or dry_run:
+            continue
+        last = _last_start.get(sid, 0.0)
+        if time.time() - last < COOLDOWN_S:
+            continue
+        _last_start[sid] = time.time()
+        result = _start_service(sid, spec)
+        if result.get("blocked"):
+            # Do not record cooldown or "started" for a service we never launched.
+            _last_start.pop(sid, None)
+            _ledger({"event": "blocked", "svc": sid, **result})
+            events.append({"svc": sid, "state": "blocked", **result})
+            continue
+        started.append(sid)
+        _ledger({"event": "start", "svc": sid, **result})
+        events.append({"svc": sid, "state": "started", **result})
+
+    chk = integrity()
+    if not chk["ok"]:
+        _ledger({"event": "missing", **chk})
+
+    summary = {
+        "ts": ts, "tick_interval_s": interval, "dry_run": dry_run,
+        "up": [e["svc"] for e in events if e.get("state") == "up"],
+        "down": [e["svc"] for e in events if e.get("state") == "down"],
+        "started": started, "integrity_ok": chk["ok"],
+        "writer": _wm,
+        "missing_dirs": chk["missing_dirs"],
+        "missing_files": chk["missing_files"],
+    }
+    try:
+        LOGS.mkdir(parents=True, exist_ok=True)
+        STATE.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        HEARTBEAT.write_text(f"{ts} pid={os.getpid()} up={len(summary['up'])} "
+                             f"down={len(summary['down'])} "
+                             f"started={len(started)} integrity_ok={chk['ok']}\n",
+                             encoding="utf-8")
+    except OSError:
+        pass
+    _ledger({"event": "tick", **summary})
+    if not quiet:
+        print(f"[{ts}] up={len(summary['up'])} down={len(summary['down'])} "
+              f"started={started or '-'} integrity={'OK' if chk['ok'] else chk}",
+              flush=True)
+    return summary
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="supervisor")
+    ap.add_argument("--once", action="store_true")
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--interval", type=int, default=30)
+    ap.add_argument("--quiet", action="store_true")
+    args = ap.parse_args(argv)
+
+    LOGS.mkdir(parents=True, exist_ok=True)
+    if not args.once:
+        if PIDFILE.exists():
+            try:
+                pid = int(PIDFILE.read_text().strip())
+            except (OSError, ValueError):
+                pid = 0
+            if pid and pid != os.getpid() and _pid_alive(pid):
+                print(f"supervisor already running (pid {pid}); exiting")
+                return 0
+        PIDFILE.write_text(str(os.getpid()), encoding="utf-8")
+
+    try:
+        if args.once:
+            tick(args.interval, dry_run=args.dry_run, quiet=args.quiet)
+            return 0
+        while True:
+            try:
+                tick(args.interval, dry_run=args.dry_run, quiet=args.quiet)
+            except Exception as exc:  # noqa: BLE001 - loop must survive
+                _ledger({"event": "tick_error", "error": repr(exc)})
+            time.sleep(max(5, args.interval))
+    finally:
+        if not args.once:
+            try:
+                PIDFILE.unlink()
+            except OSError:
+                pass
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

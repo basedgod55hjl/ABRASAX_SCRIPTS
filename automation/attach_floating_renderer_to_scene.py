@@ -1,0 +1,101 @@
+"""Attach FloatingBrainRenderer to the `Brain` GameObject in Main.unity.
+
+Measured gap: FloatingBrainRenderer.cs compiled into Assembly-CSharp.dll
+(verified by reading its BSJB heap), but the scene referenced only three scripts:
+
+    BrainClient      6bcf1d7c8a4e4cab3d5f6a7b8c9daeb4
+    BrainHUD         7cd02e8d9b5f4dbc4e6a7b8c9daebfc5
+    BrainFieldBinder 8de13f9eac6a4ecd5f7b8c9daebfc0d6
+
+FloatingBrainRenderer's guid (3783e7e28e441cf4cb996650d876599c) appeared nowhere
+in the scene, so it was dead code: compiled, never instantiated, never polled :9700.
+
+This adds it as a fourth component on the `Brain` GameObject, with fields matching
+the script exactly (Unity silently drops unknown keys but a typo would make the
+client fall back to a default, so the names are taken from the source).
+
+Idempotent: exits without writing if the guid is already present.
+"""
+import os
+import re
+import shutil
+import sys
+import time
+
+# Paths come from one resolver so a script cannot open the wrong tree.
+sys.path.insert(0, r"C:\ABRASAX\SCRIPTS\automation")
+from abra_paths import paths  # noqa: E402
+
+SCENE = str(paths.unity_scene)
+GUID = "3783e7e28e441cf4cb996650d876599c"
+NEW_COMPONENT_FILEID = "7300000005"
+NEW_SCRIPT_FILEID = "7300000006"
+
+src = open(SCENE, encoding="utf-8").read()
+
+if GUID in src:
+    print("ALREADY-PATCHED: scene already references FloatingBrainRenderer")
+    sys.exit(0)
+
+# --- 1. register the component on the Brain GameObject ---------------------
+old_components = """  - component: {fileID: 7300000002}
+  - component: {fileID: 7300000003}
+  - component: {fileID: 7300000004}
+  m_Layer: 0
+  m_Name: Brain"""
+
+new_components = """  - component: {fileID: 7300000002}
+  - component: {fileID: 7300000003}
+  - component: {fileID: 7300000004}
+  - component: {fileID: 7300000005}
+  m_Layer: 0
+  m_Name: Brain"""
+
+if old_components not in src:
+    print("ANCHOR-NOT-FOUND: Brain m_Component list")
+    sys.exit(1)
+src = src.replace(old_components, new_components, 1)
+
+# --- 2. append the MonoBehaviour block ------------------------------------
+BLOCK = f"""
+--- !u!114 &{NEW_COMPONENT_FILEID}
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {{fileID: 0}}
+  m_PrefabInstance: {{fileID: 0}}
+  m_PrefabAsset: {{fileID: 0}}
+  m_GameObject: {{fileID: 7300000001}}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {{fileID: 11500000, guid: {GUID}, type: 3}}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  baseUrl: http://127.0.0.1:9700
+  framesPerSecond: 20
+  telemetryPerSecond: 2
+  requestTimeoutSeconds: 3
+  yawDegrees: 0
+  pitchDegrees: 0
+  exposure: 24
+  quietFailures: 1
+  onFrame:
+    m_PersistentCalls:
+      m_Calls: []
+  onTelemetry:
+    m_PersistentCalls:
+      m_Calls: []
+"""
+
+if not src.endswith("\n"):
+    src += "\n"
+src += BLOCK
+
+backup = SCENE + ".bak-" + time.strftime("%Y%m%d-%H%M")
+shutil.copy2(SCENE, backup)
+with open(SCENE, "w", encoding="utf-8", newline="") as f:
+    f.write(src)
+
+print(f"PATCHED {SCENE}")
+print(f"  backup: {os.path.basename(backup)}")
+print(f"  added component {NEW_COMPONENT_FILEID} -> guid {GUID}")
+print(f"  scene grew to {len(src):,} bytes")

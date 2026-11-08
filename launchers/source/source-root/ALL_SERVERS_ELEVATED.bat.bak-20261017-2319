@@ -1,0 +1,189 @@
+@echo off
+chcp 65001 >nul
+title ABBY OS - ALL SERVERS ELEVATED
+cd /d "C:\Users\sirch\Desktop\ABRASAX_GOD_OS"
+
+echo.
+echo ╔══════════════════════════════════════════════════╗
+echo ║   ABRASAX AI - ABBY OS v0.4.0                   ║
+echo ║   ALL SERVERS ELEVATED LAUNCH                    ║
+echo ║   φ=1.618 | K=0.618 | HEX=4f53                   ║
+echo ╚══════════════════════════════════════════════════╝
+echo.
+
+:: Check for admin rights
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [!] Requesting administrator privileges...
+    powershell -Command "Start-Process '%~f0' -Verb RunAs"
+    exit /b
+)
+echo [✓] Running as Administrator
+echo.
+
+:: ── SOUL GATE (LIVE/SAFE preflight) ──────────────────
+echo [SOUL-GATE] Verifying soul lock...
+".venv\Scripts\python.exe" "_WORK\soul_gate.py"
+set "SOUL_RC=%errorlevel%"
+if not "%SOUL_RC%"=="0" (
+    echo       [!] SOUL-GATE: SAFE MODE - see line above
+    if "%ABRASAX_SOUL_STRICT%"=="1" (
+        echo       [X] STRICT MODE: aborting launch. Fix: _WORK\refresh_soul_merkle.py --apply
+        pause
+        exit /b 3
+    )
+) else (
+    echo       [OK] Soul gate: LIVE
+)
+echo.
+
+:: ── 0. ABRASAX CUDA DAEMON ──────────────────────────
+echo [0/10] Starting ABRASAX CUDA Daemon...
+if exist "build\release\bin\abrasaxd-cuda.exe" (
+    start "ABRASAX CUDA Daemon" /MIN "build\release\bin\abrasaxd-cuda.exe"
+    echo       ABRASAX CUDA Daemon launched (\\.\pipe\abrasax_daemon)
+) else (
+    echo       abrasaxd-cuda.exe not found - skipping
+)
+echo.
+
+:: ── 1. ABRASAX RUST ENGINE (abrasax.exe) ────────────
+echo [1/10] Starting ABRASAX Rust Engine...
+if exist "build\release\bin\abrasax.exe" (
+    start "ABRASAX Rust Engine" /MIN "build\release\bin\abrasax.exe" daemon
+    echo       ABRASAX Rust Engine launched (abrasax.exe daemon)
+) else (
+    echo       abrasax.exe not found - skipping
+)
+echo.
+
+:: ── 2. LM STUDIO ────────────────────────────────────
+echo [2/10] Starting LM Studio...
+start "" "C:\Users\sirch\AppData\Local\Programs\LM Studio\LM Studio.exe" --minimized
+ping -n 4 127.0.0.1 >nul
+echo       LM Studio launched (port 1234)
+
+:: ── 3. HEADROOM PROXY (removed 2026-10-03: every start path is gone —
+::       hermes/start-headroom.cmd, ~/.headroom/agent_hub.py, Python313 all
+::       absent; :8787 refused forever. The headroom fleet lives elsewhere.)
+echo [3/10] Headroom Proxy: skipped (dead start paths removed by audit)
+echo.
+
+:: ── 4. HERMES GATEWAY ──────────────────────────────
+echo [4/10] Starting Hermes Gateway...
+set "HERMES_EXE=C:\Users\sirch\AppData\Local\hermes\bin\hermes.exe"
+if not exist "%HERMES_EXE%" set "HERMES_EXE=C:\Users\sirch\AppData\Local\hermes\hermes-agent\venv\Scripts\hermes.exe"
+start "Hermes Gateway" /MIN "%HERMES_EXE%" gateway start
+ping -n 4 127.0.0.1 >nul
+echo       Hermes Gateway launched
+echo.
+
+:: ── 5. CLAUDE CODE ─────────────────────────────────
+echo [5/10] Starting Claude Code...
+start "Claude Code" /MIN cmd /c "claude --model deepseek-v4-pro --dangerously-skip-permissions"
+ping -n 3 127.0.0.1 >nul
+echo       Claude Code launching (deepseek-v4-pro)
+echo.
+
+:: ── 6. ABBY OS CRON MASTER ─────────────────────────
+echo [6/10] Starting ABBY OS Cron Master...
+if exist "CRON_MASTER.bat" (
+    start "ABBY Cron Master" /MIN cmd /c "CRON_MASTER.bat"
+    echo       ABBY OS Cron Master launched
+) else (
+    echo       CRON_MASTER.bat not found - skipping
+)
+echo.
+
+:: ── 7. PYTHON GATEWAY (port 9000) ──────────────────
+echo [7/10] Starting ABRASAX Gateway...
+curl -s http://localhost:9000/health >nul 2>&1
+if %errorlevel% equ 0 (
+    echo       ABRASAX Gateway running [✓]
+) else (
+    start "ABRASAX Gateway :9000" cmd /c "set ABRASAX_ROOT=C:\Users\sirch\Desktop\ABRASAX_GOD_OS&& set PYTHONPATH=C:\Users\sirch\Desktop\ABRASAX_GOD_OS&& C:\Users\sirch\Desktop\ABRASAX_GOD_OS\.venv\Scripts\python.exe src\drivers\gateway.py"
+    echo       ABRASAX Gateway launching (:9000) [⏳]
+)
+echo.
+
+:: ── 8. DASHBOARD (port 9100) ───────────────────────
+echo [8/10] Starting ABRASAX Dashboard...
+curl -s http://localhost:9100/v1/health >nul 2>&1
+if %errorlevel% equ 0 (
+    echo       ABRASAX Dashboard running [✓]
+) else (
+    start "ABRASAX Dashboard :9100" cmd /c "set ABRASAX_ROOT=C:\Users\sirch\Desktop\ABRASAX_GOD_OS&& C:\Users\sirch\Desktop\ABRASAX_GOD_OS\.venv\Scripts\python.exe src\ui\abrasax_server.py"
+    echo       ABRASAX Dashboard launching (:9100) [⏳]
+)
+echo.
+
+:: ── 9. SERVICE HOST (10 engines) ───────────────────
+echo [9/10] Starting ABRASAX Service Host...
+start "ABRASAX Service Host (10 engines)" cmd /c "set ABRASAX_ROOT=C:\Users\sirch\Desktop\ABRASAX_GOD_OS&& C:\Users\sirch\Desktop\ABRASAX_GOD_OS\.venv\Scripts\python.exe scripts\abrasax_service_host.py"
+echo       ABRASAX Service Host launching (10 engines) [⏳]
+echo.
+
+:: ── 10. F1 BRIDGE (port 3000) ──────────────────────
+echo [10/10] Starting F1 Hex Bridge...
+curl -s http://localhost:3000/health >nul 2>&1
+if %errorlevel% equ 0 (
+    echo       F1 bridge running [✓]
+) else (
+    start "F1 Hex Bridge :3000" cmd /c "cd /d C:\Users\sirch\Desktop\ABRASAX_GOD_OS\src\bridge && node f1_server.mjs"
+    echo       F1 bridge launching (:3000) [⏳]
+)
+echo.
+
+:: ── 11. ABRASAX BRAIN (cellbrain :9624 + synaptic :9625) ──
+echo [BRAIN] Starting ABRASAX Brain (non-stop)...
+curl -s http://localhost:9624/health >nul 2>&1
+if %errorlevel% equ 0 (
+    echo       Cellbrain :9624 running [✓]
+) else (
+    start "ABRASAX Cellbrain :9624" /MIN cmd /c "set ABRASAX_ROOT=C:\Users\sirch\Desktop\ABRASAX_GOD_OS&& C:\Users\sirch\Desktop\ABRASAX_GOD_OS\.venv\Scripts\python.exe tools\abraxas_cellbrain.py --serve --port 9624 --autoloop 10 --feed --reciprocal"
+    echo       Cellbrain :9624 launching [⏳]
+)
+curl -s http://localhost:9625/health >nul 2>&1
+if %errorlevel% equ 0 (
+    echo       Synaptic brain :9625 running [✓]
+) else (
+    start "ABRASAX Synaptic Brain :9625" /MIN cmd /c "set ABRASAX_ROOT=C:\Users\sirch\Desktop\ABRASAX_GOD_OS&& C:\Users\sirch\Desktop\ABRASAX_GOD_OS\.venv\Scripts\python.exe tools\abraxas_synaptic_server.py --serve --port 9625 --autoloop 5 --resume"
+    echo       Synaptic brain :9625 launching [⏳]
+)
+echo.
+
+:: ── STATUS SUMMARY ──────────────────────────────────
+echo ══════════════════════════════════════════════════
+echo   ALL SERVERS LAUNCHED
+echo   ─────────────────
+echo   Rust Engine   : abrasax.exe daemon
+echo   CUDA Daemon   : abrasaxd-cuda.exe (\\.\pipe\abrasax_daemon)
+echo   LM Studio     : http://localhost:1234
+echo   Headroom      : http://localhost:8787
+echo   Gateway       : http://localhost:9000
+echo   Dashboard     : http://localhost:9100
+echo   Service Host  : 10 engines
+echo   F1 Bridge     : http://localhost:3000
+echo ══════════════════════════════════════════════════
+echo.
+echo   Press any key to verify services...
+pause >nul
+
+:: ── VERIFICATION ────────────────────────────────────
+echo.
+echo [VERIFY] Checking services...
+echo.
+
+tasklist /fi "imagename eq abrasax.exe" | findstr /i abrasax.exe >nul 2>&1 && echo   [✓] Rust Engine : abrasax.exe || echo   [✗] Rust Engine : abrasax.exe
+tasklist /fi "imagename eq abrasaxd-cuda.exe" | findstr /i abrasaxd-cuda.exe >nul 2>&1 && echo   [✓] CUDA Daemon : abrasaxd-cuda.exe || echo   [✗] CUDA Daemon : abrasaxd-cuda.exe
+curl -s http://localhost:1234/v1/models >nul 2>&1 && echo   [✓] LM Studio :1234 || echo   [✗] LM Studio :1234
+curl -s http://localhost:8787/health >nul 2>&1 && echo   [✓] Headroom  :8787 || echo   [✗] Headroom  :8787
+curl -s http://localhost:9000/health >nul 2>&1 && echo   [✓] Gateway   :9000 || echo   [✗] Gateway   :9000
+curl -s http://localhost:9100/v1/health >nul 2>&1 && echo   [✓] Dashboard :9100 || echo   [✗] Dashboard :9100
+curl -s http://localhost:3000/health >nul 2>&1 && echo   [✓] F1 Bridge :3000 || echo   [✗] F1 Bridge :3000
+curl -s http://localhost:9624/health >nul 2>&1 && echo   [✓] Cellbrain :9624 || echo   [✗] Cellbrain :9624
+curl -s http://localhost:9625/health >nul 2>&1 && echo   [✓] Synaptic  :9625 || echo   [✗] Synaptic  :9625
+echo   [✓] Claude Code
+echo.
+echo   Press any key to exit...
+pause >nul

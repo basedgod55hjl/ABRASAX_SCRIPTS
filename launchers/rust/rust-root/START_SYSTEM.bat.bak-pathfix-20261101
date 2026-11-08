@@ -1,0 +1,37 @@
+@echo off
+title OSIRISBLXCK — META LAYER + BOT
+cd /d C:\Users\sirch\Desktop\ABRASAX\repos\ABRASAX
+
+REM Kill stale
+taskkill /F /IM abrasax.exe >nul 2>&1
+taskkill /F /IM abrasaxd.exe >nul 2>&1
+taskkill /F /IM python.exe /FI "CMDLINE*osirisblxck*" >nul 2>&1
+ping -n 3 127.0.0.1 >nul
+
+REM Set GPU perf mode
+nvidia-smi -pm 1 >nul 2>&1
+
+REM Launch meta layer
+echo [1] Launching Meta Layer (DeepSeek + XOR + CBM)...
+start "META" /B /MIN abrasax_rs\target\release\abrasax.exe meta > data\logs\meta_live.log 2>&1
+ping -n 9 127.0.0.1 >nul
+
+REM Launch daemon
+echo [2] Launching Daemon...
+start "DAEMON" /B /MIN abrasax_rs\target\release\abrasaxd.exe > data\logs\daemon.log 2>&1
+
+REM Launch Telegram bot
+echo [3] Launching Telegram Bot v11...
+start "BOT" /B /MIN python telegram\osirisblxck_ultimate_v11.py > data\logs\bot.log 2>&1
+
+REM Show status
+ping -n 4 127.0.0.1 >nul
+echo.
+echo === SYSTEM STATUS ===
+tasklist /FI "IMAGENAME eq abrasax.exe" 2>nul | findstr /i "abrasax"
+tasklist /FI "IMAGENAME eq python.exe" 2>nul | findstr /i "python"
+echo.
+echo Telegram: @botABRASAXbot
+echo Meta logs: data\logs\meta_live.log
+echo Bot logs: data\logs\bot.log
+echo.

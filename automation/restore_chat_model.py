@@ -1,0 +1,95 @@
+"""Restore the small working model after the bonsai load attempt evicted it.
+
+MEASURED
+    text-embedding-nomic-embed-text-v1.5   OK      1.1 s
+    gemma-4-e2b-uncensored-hauhaucs-aggressive                     FAIL    "Model is unloaded."
+    prism-ml/bonsai-27b                    FAIL    engine startup aborted (204.5 s)
+    nvidia/nemotron-3-nano-4b              FAIL    HTTP 500
+
+The small chat model WAS answering in 0.2 s earlier tonight. The bonsai load attempt
+reserved most of VRAM, failed, and the failure evicted lfm2.5 -- so a failed big load
+cost a working small one. That is the real damage, and it is why the AI bind and the
+build loop have been failing.
+
+This asks LM Studio to load lfm2.5 again and verifies it answers. If LM Studio will
+not reload it, the honest state is "no chat model available" and the launcher must
+say so rather than preloading something that cannot load.
+"""
+import json
+import sys
+import time
+import urllib.error
+import urllib.request
+
+BASE = "http://127.0.0.1:1234"
+MODEL = "gemma-4-e2b-uncensored-hauhaucs-aggressive"
+
+
+def chat(timeout=240):
+    body = json.dumps({"model": MODEL,
+                       "messages": [{"role": "user", "content": "say hi"}],
+                       "max_tokens": 8}).encode()
+    req = urllib.request.Request(f"{BASE}/v1/chat/completions", data=body,
+                                 method="POST",
+                                 headers={"Content-Type": "application/json"})
+    t0 = time.time()
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            d = json.loads(r.read().decode())
+            c = d.get("choices", [{}])[0].get("message", {}).get("content")
+            return True, round(time.time() - t0, 1), c, None
+    except urllib.error.HTTPError as e:
+        return False, round(time.time() - t0, 1), None, \
+               f"HTTP {e.code}: {e.read().decode('utf-8', 'replace')[:140]}"
+    except Exception as e:  # noqa: BLE001
+        return False, round(time.time() - t0, 1), None, f"{type(e).__name__}: {e}"
+
+
+print(f"=== is {MODEL} resident? ===")
+try:
+    with urllib.request.urlopen(f"{BASE}/api/v0/models", timeout=15) as r:
+        models = json.loads(r.read().decode()).get("data", [])
+    for m in models:
+        if m.get("id") == MODEL:
+            print(f"  state = {m.get('state')}  (loaded={m.get('state') == 'loaded'})")
+            break
+    else:
+        print(f"  {MODEL} not listed at all")
+except Exception as e:  # noqa: BLE001
+    print(f"  /api/v0/models unavailable: {type(e).__name__}: {e}")
+
+print(f"\n=== attempt 1: direct chat (may trigger a load) ===")
+ok, secs, content, err = chat()
+print("  ok=%s %ss  %s" % (ok, secs, repr(content) if content else err))
+
+if not ok:
+    print(f"\n=== attempt 2: explicit load via /api/v0/models/{MODEL}/load ===")
+    try:
+        body = json.dumps({"model": MODEL}).encode()
+        req = urllib.request.Request(
+            f"{BASE}/api/v0/models/{MODEL}/load", data=body, method="POST",
+            headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=300) as r:
+            print(f"  load HTTP {r.status}: {r.read()[:180].decode('utf-8', 'replace')}")
+    except urllib.error.HTTPError as e:
+        print(f"  load HTTP {e.code}: {e.read()[:180].decode('utf-8', 'replace')}")
+    except Exception as e:  # noqa: BLE001
+        print(f"  load failed: {type(e).__name__}: {e}")
+
+    time.sleep(3)
+    print(f"\n=== attempt 3: chat again after the explicit load ===")
+    ok, secs, content, err = chat()
+    print("  ok=%s %ss  %s" % (ok, secs, repr(content) if content else err))
+
+print("\n=== state ===")
+try:
+    with urllib.request.urlopen(f"{BASE}/api/v0/models", timeout=15) as r:
+        models = json.loads(r.read().decode()).get("data", [])
+    loaded = [m["id"] for m in models if m.get("state") == "loaded"]
+    print(f"  loaded now: {loaded}")
+except Exception:  # noqa: BLE001
+    pass
+
+print("\nRESULT:", "PASS -- chat model restored"
+      if ok else "FAIL -- no chat model available; the launcher must not pretend otherwise")
+sys.exit(0 if ok else 1)

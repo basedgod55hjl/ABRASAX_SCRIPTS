@@ -1,0 +1,76 @@
+"""Extract the real cause from LM Studio's server log for the failing models.
+
+Measured failures:
+    nvidia/nemotron-3-nano-4b          HTTP 400 "Engine protocol startup was aborted"
+    deepseek/deepseek-r1-0528-qwen3-8b HTTP 500 "Internal Server Error" (no detail)
+    huihui-deepseek-v4-flash-...-ds4   HTTP 500 "Internal Server Error" (no detail)
+
+The 500s carry no information in the HTTP body, so the server log is the only
+source. The log is 4.9 MB, so scan it backwards for the relevant model names and
+error markers rather than reading it whole.
+"""
+import os
+import re
+import sys
+
+LOG = r"C:\Users\sirch\.lmstudio\server-logs\2026-10\2026-10-18.1.log"
+
+if not os.path.exists(LOG):
+    print(f"missing: {LOG}")
+    sys.exit(1)
+
+size = os.path.getsize(LOG)
+print(f"log: {LOG}  ({size:,} bytes)\n")
+
+# read the tail -- the failures just happened
+TAIL = 900_000
+with open(LOG, "rb") as f:
+    if size > TAIL:
+        f.seek(size - TAIL)
+        f.readline()
+    data = f.read().decode("utf-8", "replace")
+
+lines = data.splitlines()
+print(f"scanning the last {len(lines):,} line(s)\n")
+
+PATTERNS = {
+    "nemotron": re.compile(r"nemotron", re.I),
+    "deepseek": re.compile(r"deepseek", re.I),
+    "error": re.compile(r"\b(error|failed|failure|abort|cannot|unable|oom|"
+                        r"out of memory|insufficient)\b", re.I),
+    "load": re.compile(r"\b(load|loading|unload)\b", re.I),
+}
+
+for name in ("nemotron", "deepseek"):
+    rx = PATTERNS[name]
+    hits = [ln for ln in lines if rx.search(ln)]
+    print("=" * 78)
+    print(f"{name.upper()}: {len(hits)} line(s)")
+    print("=" * 78)
+    # show the last 12, and any that also look like errors
+    errish = [ln for ln in hits if PATTERNS["error"].search(ln)]
+    print(f"  of which error-like: {len(errish)}")
+    for ln in hits[-12:]:
+        print("  " + ln.strip()[:150])
+    print()
+
+print("=" * 78)
+print("LAST 25 ERROR-LIKE LINES OVERALL")
+print("=" * 78)
+err_lines = [ln for ln in lines if PATTERNS["error"].search(ln)]
+for ln in err_lines[-25:]:
+    print("  " + ln.strip()[:150])
+
+# specifically look for a stack/exception pattern common in llama.cpp bindings
+print("\n" + "=" * 78)
+print("STACK / EXCEPTION MARKERS")
+print("=" * 78)
+for marker in ("Traceback", "Exception", "at llama", "GGML", "gguf",
+               "context", "VRAM", "CUDA", "device"):
+    found = [ln for ln in lines[-4000:] if marker in ln]
+    if found:
+        print(f"  {marker}: {len(found)} recent line(s)")
+        for ln in found[-3:]:
+            print("    " + ln.strip()[:140])
+
+sys.exit(0)

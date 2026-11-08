@@ -1,0 +1,99 @@
+#requires -Version 5.1
+<#
+  ABRASAX - verified phone reclamation, batched.
+
+  Deletes a file on the phone ONLY when:
+    1. a local copy exists at the mirrored path,
+    2. its SHA-256 appears in the offload manifest,
+    3. the phone's reported size equals the local size.
+
+  Batched for speed: one `find -printf` call lists the phone, the manifest is
+  read in memory, and deletions are sent as a single `rm` per chunk. The
+  previous per-file `adb shell` version took minutes per hundred files.
+
+  Default is a dry run. Pass -Apply to delete.
+#>
+param(
+  [string]$Serial = 'R5CY308WZVK',
+  [string]$Dest   = 'J:\ABRASAX_OFFLOAD\S25_R5CY308WZVK',
+  [string[]]$Paths = @(
+    '/sdcard/DCIM/Camera',
+    '/sdcard/DCIM/Screenshots',
+    '/sdcard/DCIM/Screen recordings',
+    '/sdcard/iPhoneData/Movies',
+    '/sdcard/iPhoneData/Pictures',
+    '/sdcard/Movies',
+    '/sdcard/photos',
+    '/sdcard/Pictures',
+    '/sdcard/Download'
+  ),
+  [switch]$Apply,
+  [int]$Chunk = 200
+)
+
+$ErrorActionPreference = 'Continue'
+$adb = 'C:\abrasax\_DEAD_PATH\Android\platform-tools\adb.exe'  # DEAD PATH (sirch): no adb.exe on this host
+
+$manifest = Get-ChildItem $Dest -Filter '_manifest_*.tsv' -EA SilentlyContinue |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+if (-not $manifest) { Write-Error "no manifest in $Dest"; exit 2 }
+
+$verified = @{}
+$hcount = 0
+foreach ($line in Get-Content $manifest.FullName) {
+  $parts = $line -split "`t"
+  if ($parts.Count -ge 3) { $verified[$parts[2]] = [int64]$parts[1]; $hcount++ }
+}
+Write-Host "[reclaim] manifest entries: $hcount"
+
+# one round-trip: path + size for every candidate
+$listing = & $adb -s $Serial shell "find $($Paths -join ' ') -type f -size +0 -printf '%s`t%p\n' 2>/dev/null"
+if (-not $listing) { Write-Host "[reclaim] phone returned no files"; exit 0 }
+
+$log = Join-Path $Dest ("_reclaim_{0}.jsonl" -f (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ"))
+$deletable = New-Object System.Collections.Generic.List[string]
+$bytes = 0L; $checked = 0; $kept = 0
+
+foreach ($line in $listing) {
+  $line = $line.Trim()
+  if (-not $line) { continue }
+  $tab = $line.IndexOf("`t")
+  if ($tab -lt 1) { continue }
+  $rsize = 0L
+  if (-not [int64]::TryParse($line.Substring(0, $tab), [ref]$rsize)) { continue }
+  $remote = $line.Substring($tab + 1)
+  $checked++
+
+  $rel = $remote -replace '^/sdcard/',''
+  $local = Join-Path $Dest ($rel -replace '/','\')
+
+  if (-not (Test-Path -LiteralPath $local)) { $kept++; continue }
+  if (-not $verified.ContainsKey($rel)) { $kept++; continue }
+  if ($verified[$rel] -ne $rsize) { $kept++; continue }
+  if ((Get-Item -LiteralPath $local).Length -ne $rsize) { $kept++; continue }
+
+  $deletable.Add($remote)
+  $bytes += $rsize
+}
+
+Write-Host ("[reclaim] checked={0} verified_deletable={1} kept={2} GB={3}" -f `
+  $checked, $deletable.Count, $kept, [math]::Round($bytes/1GB,2))
+
+if (-not $Apply) {
+  [pscustomobject]@{ mode='dry-run'; checked=$checked; deletable=$deletable.Count;
+                     kept=$kept; GB=[math]::Round($bytes/1GB,2) } | ConvertTo-Json
+  exit 0
+}
+
+$done = 0
+for ($i = 0; $i -lt $deletable.Count; $i += $Chunk) {
+  $slice = $deletable.GetRange($i, [Math]::Min($Chunk, $deletable.Count - $i))
+  $quoted = ($slice | ForEach-Object { "'" + $_ + "'" }) -join ' '
+  & $adb -s $Serial shell "rm -f $quoted" 2>&1 | Out-Null
+  foreach ($r in $slice) { "{`"ev`":`"deleted`",`"src`":`"$r`"}" | Add-Content $log }
+  $done += $slice.Count
+  Write-Host "[reclaim] deleted $done / $($deletable.Count)"
+}
+
+$after = & $adb -s $Serial shell 'df -k /data | tail -1'
+[pscustomobject]@{ mode='apply'; deleted=$done; GB=[math]::Round($bytes/1GB,2); df=$after } | ConvertTo-Json

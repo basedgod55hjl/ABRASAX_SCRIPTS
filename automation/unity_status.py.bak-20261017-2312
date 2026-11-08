@@ -1,0 +1,69 @@
+"""Report the state of the Unity UPM install after the sha1 repair.
+
+Quoting a PowerShell one-liner with an apostrophe broke twice, so this is a file.
+
+Reports, for the CURRENT run only (upm.log is truncated by Unity each launch):
+  * how many 'malformed Unity Editor installation' errors remain
+  * whether project:list-packages succeeded
+  * package cache / script assembly counts
+  * editor CPU and working set
+"""
+import os
+import re
+import subprocess
+import sys
+
+PROJ = r"J:\UnityProjects\ABRASAX-Brain"
+UPM = os.path.join(PROJ, "Logs", "upm.log")
+LIB = os.path.join(PROJ, "Library")
+
+
+def count_files(path):
+    if not os.path.isdir(path):
+        return 0
+    n = 0
+    for _dp, _dn, fns in os.walk(path):
+        n += len(fns)
+    return n
+
+
+print("=== upm.log ===")
+if os.path.exists(UPM):
+    txt = open(UPM, encoding="utf-8", errors="replace").read()
+    malformed = txt.count("malformed Unity Editor installation")
+    print(f"size            : {len(txt):,} bytes")
+    print(f"malformed errors: {malformed}")
+
+    lists = re.findall(r"project:list-packages --> (\d+)", txt)
+    print(f"list-packages   : {lists if lists else 'never returned'}")
+
+    for pat in ("config:project:get-registries", "project:resolve", "packages:add"):
+        hits = re.findall(re.escape(pat) + r" --> (\d+)", txt)
+        if hits:
+            print(f"{pat:32s}: {hits}")
+
+    tail = [ln for ln in txt.splitlines() if ln.strip()][-3:]
+    print("last lines:")
+    for ln in tail:
+        print("  " + ln[:150])
+else:
+    print("no upm.log yet")
+
+print("\n=== library ===")
+print(f"PackageCache    : {count_files(os.path.join(LIB, 'PackageCache'))}")
+print(f"ScriptAssemblies: {count_files(os.path.join(LIB, 'ScriptAssemblies'))}")
+sa = os.path.join(LIB, "ScriptAssemblies")
+if os.path.isdir(sa):
+    for fn in sorted(os.listdir(sa))[:12]:
+        print(f"  {fn}")
+
+print("\n=== editor ===")
+ps = subprocess.run(
+    ["powershell", "-NoProfile", "-Command",
+     "Get-Process Unity -EA 0 | Where-Object {$_.Id -ne 37568} | "
+     "ForEach-Object { \"$($_.Id) cpu=$([math]::Round($_.CPU,0)) "
+     "ws=$([math]::Round($_.WorkingSet64/1MB,0))MB\" }"],
+    capture_output=True, text=True)
+print(ps.stdout.strip() or "no editor process")
+
+sys.exit(0)

@@ -1,0 +1,111 @@
+"""Rebuild the automation brain with MEASURED facts, not hand-written guesses.
+
+v1 of automation_brain.json claimed 221 of 258 tools "import_safe" because I
+hardcoded a blacklist of 37 names. Measurement (audit_imports.py) shows the
+truth is 2 of 264: 203 tools call sys.exit at module scope, 30 mutate files, 29
+do arbitrary work. An index that mislabels a destructive tool as importable is
+actively dangerous -- the next agent imports reclaim_bt2 and deletes a folder.
+
+v2 therefore carries, per tool:
+  * safety        -- measured class (pure / does-work / mutates / exits)
+  * third_party   -- real dependencies, so a tool isn't runnable where it can't import
+  * documented    -- has a module docstring (and its first line)
+  * tested        -- referenced by name in TESTS/python
+  * cli           -- has a __main__ entry point, i.e. is runnable
+  * sha16         -- stale-detect
+and refuses to emit `import_safe: True` unless the tool is actually pure.
+"""
+from __future__ import annotations
+
+import ast
+import hashlib
+import json
+import re
+from pathlib import Path
+
+ROOT = Path(r"C:\ABRASAX")
+AUTO = ROOT / "SCRIPTS/automation"
+AUDIT = ROOT / "DATA/runtime-memory/automation_import_audit.json"
+TESTS = ROOT / "TESTS/python"
+OUT = ROOT / "DATA/runtime-memory/automation_brain.json"
+
+
+def sha16(p: Path) -> str:
+    h = hashlib.sha256()
+    with p.open("rb") as fh:
+        for c in iter(lambda: fh.read(1 << 20), b""):
+            h.update(c)
+    return h.hexdigest()[:16]
+
+
+def main() -> int:
+    audit = {t["tool"]: t for t in json.loads(AUDIT.read_text(encoding="utf-8"))["tools"]}
+    test_src = "\n".join(t.read_text(encoding="utf-8", errors="replace")
+                         for t in TESTS.glob("test_*.py"))
+
+    tools = []
+    for p in sorted(AUTO.glob("*.py")):
+        if p.stem.startswith("_"):
+            continue
+        try:
+            tree = ast.parse(p.read_text(encoding="utf-8", errors="replace"))
+        except SyntaxError:
+            continue
+        doc = (ast.get_docstring(tree) or "").strip().splitlines()
+        a = audit.get(p.stem, {})
+        safety = a.get("safety", "unknown")
+        tools.append({
+            "tool": p.stem,
+            "path": str(p),
+            "bytes": p.stat().st_size,
+            "sha16": sha16(p),
+            "summary": doc[0][:160] if doc else "",
+            "documented": bool(doc),
+            "safety": safety,
+            # ONLY pure tools may be called importable. No hand-written override.
+            "import_safe": safety == "pure",
+            "third_party": a.get("third_party", []),
+            "module_scope_calls": a.get("module_scope_calls", -1),
+            "mutating_calls": a.get("mutating_calls", []),
+            "cli": any(isinstance(n, ast.If) and "__main__" in ast.dump(n)
+                       for n in tree.body),
+            "tested": bool(re.search(rf"\b{re.escape(p.stem)}\b", test_src)),
+        })
+
+    tally: dict[str, int] = {}
+    for t in tools:
+        tally[t["safety"]] = tally.get(t["safety"], 0) + 1
+
+    brain = {
+        "registry": "automation",
+        "version": 2,
+        "supersedes": "v1 hand-written blacklist that claimed 221 import-safe "
+                      "against a measured truth of 2",
+        "generated_by": "SCRIPTS/automation/brain_automation.py + audit_imports.py",
+        "root": str(AUTO),
+        "count": len(tools),
+        "safety_tally": dict(sorted(tally.items(), key=lambda kv: -kv[1])),
+        "import_safe": sum(1 for t in tools if t["import_safe"]),
+        "runnable": sum(1 for t in tools if t["cli"]),
+        "documented": sum(1 for t in tools if t["documented"]),
+        "tested": sorted(t["tool"] for t in tools if t["tested"]),
+        "tools": tools,
+    }
+    brain["digest"] = hashlib.sha256(
+        json.dumps([(t["tool"], t["sha16"], t["safety"]) for t in tools]).encode()
+    ).hexdigest()[:16]
+    OUT.write_text(json.dumps(brain, indent=1), encoding="utf-8")
+
+    print(f"automation brain v2 -> {OUT.name} ({OUT.stat().st_size} B)")
+    print(f"  tools        : {brain['count']}")
+    print(f"  import_safe  : {brain['import_safe']}  (measured, was 221 claimed)")
+    print(f"  runnable(cli): {brain['runnable']}")
+    print(f"  documented   : {brain['documented']}")
+    print(f"  tested       : {len(brain['tested'])} -> {brain['tested'][:6]}")
+    print(f"  safety       : {brain['safety_tally']}")
+    print(f"  digest       : {brain['digest']}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
