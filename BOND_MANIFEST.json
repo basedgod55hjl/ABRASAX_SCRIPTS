@@ -1,0 +1,3352 @@
+﻿{
+    "repo":  "ABRASAX_SCRIPTS",
+    "branch":  "master",
+    "commit":  "9dd472d",
+    "generated":  "2026-11-08T07:52:33.3164095-05:00",
+    "soul":  "KAIROS",
+    "soul_fingerprint":  "8a47ffe9e140730744b48a8176325e5d30e87f09d77182d4fc21692ea8d341fc",
+    "soul_pub_prefix":  "302a300506032b6570032100",
+    "file_count":  835,
+    "files":  [
+                  {
+                      "sha256":  "4de46d64099559689933adfc53610fbca19a8a9f51366a5cb97506b10255ef74",
+                      "path":  ".gitignore"
+                  },
+                  {
+                      "sha256":  "3593f9470482c88f3951d360744ead04aaf7c7d554a5fa5506b2155e9c71318e",
+                      "path":  "ABRASAX-SenseLoop.xml"
+                  },
+                  {
+                      "sha256":  "1019096f3781c7c83a596ee5529b926852a32f6c4cf2eb0f752ae3459e67eff7",
+                      "path":  "BOND.md"
+                  },
+                  {
+                      "sha256":  "bd49b3374e76836bb1bbf59d153a77133fbbebe644f878392f9e31b7463ce39a",
+                      "path":  "PROVENANCE.md"
+                  },
+                  {
+                      "sha256":  "3236d7d8aa8443ee6d343d2095b8ffb81c08cc89b2fa344cdbe4797c3e26a0fd",
+                      "path":  "README.md"
+                  },
+                  {
+                      "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                      "path":  "__init__.py"
+                  },
+                  {
+                      "sha256":  "8d04171774a9062976e18799c357feb5fdd73c9a1b56b0a8d3bc7f0b4140a234",
+                      "path":  "_add_pidfile_window_test.py"
+                  },
+                  {
+                      "sha256":  "72d87b08cb16766fe0f9d32df639b36edca237c5d9c58337b9be6bb3d828ab7b",
+                      "path":  "_append_debris_ignore.py"
+                  },
+                  {
+                      "sha256":  "4f2d0b37fa201d9d1be06bb11a2d9f9eaa560a4336a4d73001c59fe68fa03f63",
+                      "path":  "_append_unity_csproj_ignore.py"
+                  },
+                  {
+                      "sha256":  "2c8deccdd28bce62bac15e2c2b8da21d72f881467bbb720bc1f4fd0ab4478204",
+                      "path":  "_append_unity_ignore.py"
+                  },
+                  {
+                      "sha256":  "30a6fd1e6831929f6575b37d3d905a193464215afec03912abdfff8b71c67ec8",
+                      "path":  "_broaden_unity_ignore.py"
+                  },
+                  {
+                      "sha256":  "b9a8f8dd29ddd2211b7799be552242bbbc0e1f97eac1d74683872b8119e70d5d",
+                      "path":  "_doc_add_addall.py"
+                  },
+                  {
+                      "sha256":  "293e21170da5d2cdf8ee5ac2ffc5c0572e0dbe1820245a83acd6f5db45db7fbb",
+                      "path":  "_doc_add_d6.py"
+                  },
+                  {
+                      "sha256":  "eef9109d20cb402de2004fc323319701b4fd15c0a3399b194eaa4a93ec9cdf15",
+                      "path":  "_doc_add_final.py"
+                  },
+                  {
+                      "sha256":  "a85a0740912be4709df79113235d965069a3b05df30635a3777beda9cf231889",
+                      "path":  "_doc_add_final.py.bak-gemma-20261101-213539"
+                  },
+                  {
+                      "sha256":  "97cb8b2af8b3a4a2235ddd4b8f89104040cbb446dded48e63c7727451861abd2",
+                      "path":  "_doc_add_headless_local.py"
+                  },
+                  {
+                      "sha256":  "062c54a2c694055f869ac4d8436723b6faf01ab4334824b129e625e9171dcc91",
+                      "path":  "_doc_add_headless_local.py.bak-gemma-20261101-213539"
+                  },
+                  {
+                      "sha256":  "6e222feb64962dc182a5b54f8f51be27b8ca819de8b2ae09cbf5d28cdda6bcc2",
+                      "path":  "_doc_add_lmstudio.py"
+                  },
+                  {
+                      "sha256":  "f475be1356cc65b9bca2d405380ff991ff1c9f4a8fe67e8585aa85fe4cb04e10",
+                      "path":  "_doc_add_lmstudio.py.bak-gemma-20261101-213539"
+                  },
+                  {
+                      "sha256":  "bc38ef235718e337fc3d3bd7f6a1918401d74c424214e13d22a04b81caf88efb",
+                      "path":  "_doc_add_ops_headless.py"
+                  },
+                  {
+                      "sha256":  "ea67f4d41ae1e9abc280a984ef2481e9a2eb77c9f2da75628afba054b249858c",
+                      "path":  "_doc_add_warm_auth.py"
+                  },
+                  {
+                      "sha256":  "37672ae0119a3637303aaf5f80dc747ff791915c93aa899eb214568284b77034",
+                      "path":  "_doc_update_library.py"
+                  },
+                  {
+                      "sha256":  "14edc226e99fd7ee4a252726e73e92a554cd8a432db9fedef5ee682a1c808701",
+                      "path":  "_extend_local_tests.py"
+                  },
+                  {
+                      "sha256":  "179d8db1f719121ceddee443d113b51385e751d71815327678f99459f0b20089",
+                      "path":  "_fix_ask.py"
+                  },
+                  {
+                      "sha256":  "7c69b3876d8b10dc70796f37e13525a5bf0c4ef611915470819937fab922834f",
+                      "path":  "_fix_ask2.py"
+                  },
+                  {
+                      "sha256":  "db7b2a6eaa6f116c96b1c568d3b78ed13ee5122b75fed528f0716e8715e48124",
+                      "path":  "_fix_ask3.py"
+                  },
+                  {
+                      "sha256":  "16cf961600d7877c0580ed1a765095a194d8628caa0bd60bae3cbffb8b13bba7",
+                      "path":  "_fix_buildnow.py"
+                  },
+                  {
+                      "sha256":  "e4b2879204cc4321a150c0c0b3ff2d854cbd523cfa286433c56f73c4ee7499a4",
+                      "path":  "_fix_buildnow2.py"
+                  },
+                  {
+                      "sha256":  "a07e9b090b647398f68f2443f740b0a12ee7b5a1c6c768a8000c4f87f508e991",
+                      "path":  "_fix_fallback_slice.py"
+                  },
+                  {
+                      "sha256":  "3ab88f2d23da9a422e2dd295ab71b19e5b981bb781e85b2c380d4ad9f8f8fcda",
+                      "path":  "_fix_gate_anchor.py"
+                  },
+                  {
+                      "sha256":  "84b71c49cc89153cc330b34bcce59b2f45ef3087d4df95d8fdff14d5d0d4624f",
+                      "path":  "_fix_gitignore_dist.py"
+                  },
+                  {
+                      "sha256":  "124feac4eaa14346e6c22210ff94a1c8f3a12a9b3d4ace4011dd2a3d2638c0df",
+                      "path":  "_fix_headless_tests.py"
+                  },
+                  {
+                      "sha256":  "92b96f2183a223654349b30fc680dfe590ddd16d5746e89412967945678485be",
+                      "path":  "_fix_llm_msgs.py"
+                  },
+                  {
+                      "sha256":  "6548d3b3ac2afb552281fa0262f095cee4d9290efa1acb258f90ef9336a36e48",
+                      "path":  "_fix_lms_autostart_test.py"
+                  },
+                  {
+                      "sha256":  "b2729f8bd3d0c903d75c7a8864223ebb5d16d4bb80e2c76e6ed2b878a179e0ac",
+                      "path":  "_fix_paid_allowed.py"
+                  },
+                  {
+                      "sha256":  "7af12e5f9377e725c8d8840371d4bd47ef9b91c410c059ee64a5462ff396b329",
+                      "path":  "_fix_repo_private.py"
+                  },
+                  {
+                      "sha256":  "fea7d0219abee94153af134f178e4d7b67a655e289a5d89e74c0b1efb9b11401",
+                      "path":  "_fix_repos24.py"
+                  },
+                  {
+                      "sha256":  "ab73c59aa7c19d8fadfa472476e8e95f83ffe144d32ed1e136107773efe625e2",
+                      "path":  "_fix_repos24b.py"
+                  },
+                  {
+                      "sha256":  "9e390e59f4e9a15f50860fad02461add65bbfc9fd49dfe6ed91400dc3a5b3c65",
+                      "path":  "_fix_seat.py"
+                  },
+                  {
+                      "sha256":  "8fa42fc141ae24d3ba5d0e72304a8475cc650de242e849a2be3c95f3d03e7cac",
+                      "path":  "_fix_seat2.py"
+                  },
+                  {
+                      "sha256":  "f5e26d76a54b3e4f20038d48fbbdef219cbee6a9d3536066a3a967caa89cbe01",
+                      "path":  "_fix_seat3.py"
+                  },
+                  {
+                      "sha256":  "3d2222cc4c21e4f460893f2bbff79f0fb80fc593ec6bf14c4a9ea1e64cb66832",
+                      "path":  "_fix_seat4.py"
+                  },
+                  {
+                      "sha256":  "e0e9c7ce955818d667bfcbc5db7175bf0eb6df1a153545ce962b692df0a14904",
+                      "path":  "_fix_seat5.py"
+                  },
+                  {
+                      "sha256":  "c31ffc35920f30bfb78a243eba6f16618b0baca1b4c6cc1c0a1e36027aba6666",
+                      "path":  "_fix_stack.py"
+                  },
+                  {
+                      "sha256":  "05eb6617ec26522d8b20b45d3dda7a66fc67cb356a8ac602dff75a03b21a29d7",
+                      "path":  "_fix_start_all_test.py"
+                  },
+                  {
+                      "sha256":  "9beb3c0ee9d88a2f7a54cb440ce80692655b0642c388670f48c9e491304b551b",
+                      "path":  "_fix_team2.py"
+                  },
+                  {
+                      "sha256":  "4b6ba2d3bcaa9c9a72abee7fb64c0d31bcf9a400a25d244fcfde925ddf4b62c7",
+                      "path":  "_fix_team3.py"
+                  },
+                  {
+                      "sha256":  "9f5f77687af224787f97201873522761b52aa86d0e7c7d59967f22188c5673e2",
+                      "path":  "_fix_team4.py"
+                  },
+                  {
+                      "sha256":  "5d5d26582544a4cb51be0a30348d3885ed962b873692700fdb18fba80ffcde64",
+                      "path":  "_fix_team_imports.py"
+                  },
+                  {
+                      "sha256":  "8512823553fe262fff5283112f330172649ed4d276c3bd25feae2f753ced3022",
+                      "path":  "_lms_requires.py"
+                  },
+                  {
+                      "sha256":  "c20c22a71eec4931ed5d5f7b745eff1328411c86dd587ef75d99be42b2bbcd05",
+                      "path":  "_lms_use_wrapper.py"
+                  },
+                  {
+                      "sha256":  "e49f85f918902c4098fbd1c9ee6d4a8881e4e12d236daa29fb9892a7ed9ce3f7",
+                      "path":  "_probe_buildloop_warm.py"
+                  },
+                  {
+                      "sha256":  "b904d7e3068c96c8d3b1a2f2edf37f996bf07bcf440fd7015683b01e85c7c1c7",
+                      "path":  "_probe_headless_spawn.py"
+                  },
+                  {
+                      "sha256":  "ba3e5ad62959227cd46014f4d67425fb82ef8b6b2850f9013f35041c1e09bf7b",
+                      "path":  "_probe_lmstudio_chat.py"
+                  },
+                  {
+                      "sha256":  "a02348b87c92ef5c51902bbd60c7284ab8186db98ad8dbf0dbac64b8b445d505",
+                      "path":  "_probe_lmstudio_matrix.py"
+                  },
+                  {
+                      "sha256":  "4ab074810fa991cd49e6f1373bfd8199d25369b857d3181510865d2f093099a8",
+                      "path":  "_probe_local_route.py"
+                  },
+                  {
+                      "sha256":  "8f440c532cd6a640a3924f1e9e6a163a76b1509b721db02e409f9535d0561087",
+                      "path":  "_probe_neo_gguf.py"
+                  },
+                  {
+                      "sha256":  "973ddf4497ca248a71795d7f0bb4db351f94dbd9465525f9ccf091651f61e170",
+                      "path":  "_probe_npz.py"
+                  },
+                  {
+                      "sha256":  "9874b8c69ce6df7856f26c06068d155e235ff34ae41c21eaec718423aac0e8d9",
+                      "path":  "_probe_select.py"
+                  },
+                  {
+                      "sha256":  "527c8fcdc22f508481874d2bc2530fbd277517beb2a8c5202f2ffabf745aa9ca",
+                      "path":  "_probe_singleton_pid_reuse.py"
+                  },
+                  {
+                      "sha256":  "8c506168f8ede14edda2efeef62d47c621fb2f26c769465aedec5beec30babd2",
+                      "path":  "_probe_supervisor_pidreuse.py"
+                  },
+                  {
+                      "sha256":  "929f4aa6ba89852bff275f1dce284f4b8bfb031402e34497f9a466f60e8c3bf5",
+                      "path":  "_probe_visible_consoles.py"
+                  },
+                  {
+                      "sha256":  "6f0d9b16022070b6ca07a73d2780d293c2bde97619522588609c4453e2c9c2c1",
+                      "path":  "_probe_warm_auth.py"
+                  },
+                  {
+                      "sha256":  "c1638c52db60778f3e3987d16c69921169408ae5933d46bae3466fb06f56aa90",
+                      "path":  "_scan_staged_for_secrets.py"
+                  },
+                  {
+                      "sha256":  "311d3b197ce790a1d788141df3e021800f3a9d67431a088520435e4419dba9ec",
+                      "path":  "add_cli_services_start.py"
+                  },
+                  {
+                      "sha256":  "411e0aec3c862b2eec336608565fd41946840ac9db25b9c39de14cf9443f0564",
+                      "path":  "add_services_start_all.py"
+                  },
+                  {
+                      "sha256":  "70beba5bedaec0ef133744b3a679fb84a7cd3578e5d2de99a8cf4790b34cfe23",
+                      "path":  "anchor_substrate.py"
+                  },
+                  {
+                      "sha256":  "8ce94b10b541dbeaf7d206705ea3fde95eabe05c2d10b7d180d2c0b3f67fb111",
+                      "path":  "append_artifact_index.py"
+                  },
+                  {
+                      "sha256":  "eb8fded2302cd576b9069517ce20a868408340bb3f354b5f09c5e4b083cf08a8",
+                      "path":  "append_leak_status.py"
+                  },
+                  {
+                      "sha256":  "e8afc3bf9ff267d59efea9ca83b06f1a03faf4e39bd5717a3da68aa3ff42496d",
+                      "path":  "append_state_ci.py"
+                  },
+                  {
+                      "sha256":  "df10b7cdc27bc537bbde0aad73448394360f972b379f840a9fc78b3c2cfe9662",
+                      "path":  "apply_ci_template.py"
+                  },
+                  {
+                      "sha256":  "54bd0f079ab44983341cf276c9b3ce341a5564d80f278c50a1f6077a6bdc6403",
+                      "path":  "automation/_ds_alias.py"
+                  },
+                  {
+                      "sha256":  "0b7bac48fec1d7edf312a7fb3a525620d56f150c05ae37c7f9168c7bee8b0e15",
+                      "path":  "automation/_ds_chat.py"
+                  },
+                  {
+                      "sha256":  "aded9cdf71374d79a91c0c255b104bbf4ddd80536ca762d6c96b794fa4a16e64",
+                      "path":  "automation/_ds_gateway.py"
+                  },
+                  {
+                      "sha256":  "6e05d5dbe07c5fc815d1f86c9324b4c3115b424a4666ebb7e29865b2768f3941",
+                      "path":  "automation/_ds_probe.py"
+                  },
+                  {
+                      "sha256":  "0b066afd4ddca862a26b36867eb627b1bfc3cfac5fd1c8394ebc229b097b99ea",
+                      "path":  "automation/_jev_probe.py"
+                  },
+                  {
+                      "sha256":  "7fd2f0d6b92167f8b7644d09860ad7e5552f86172bf4fa4c373e4fc20dc8aaea",
+                      "path":  "automation/_jev_real.py"
+                  },
+                  {
+                      "sha256":  "68e544697932643baa3456a7decaceb6b4bf3e6c114cd748bc112be3b184be89",
+                      "path":  "automation/_keys_verify.py"
+                  },
+                  {
+                      "sha256":  "0ea365fdc4b84fc2f1ed689dc22b9c939ca35b5b8b2144e3ae4c5b13b4719acb",
+                      "path":  "automation/_lsp.ps1"
+                  },
+                  {
+                      "sha256":  "8c7d0e3fe58da860c94d503d7ea4bf85a53a4b63b9a94054d7f0ff46d98b2458",
+                      "path":  "automation/_pause_pinner.ps1"
+                  },
+                  {
+                      "sha256":  "e51d229e29c637ec5ab39ac6bbd6aec1d899aecfe71b8156e87c53b47cbbdd4c",
+                      "path":  "automation/_probestat.ps1"
+                  },
+                  {
+                      "sha256":  "282d517c43350e2aab7c9cae5cd447c0a60d145f4e20de74ef7bfa24c6cf3214",
+                      "path":  "automation/_readfusion.py"
+                  },
+                  {
+                      "sha256":  "ae6da7ba78d62ad0087f65739b681d105d74ea47592eca269504ee84b71dce85",
+                      "path":  "automation/_repair_gguf.py"
+                  },
+                  {
+                      "sha256":  "6900d2ef78511cdfdc3f52cf9dc4b3d589ea2456293d7d3076b9eaa6baba963d",
+                      "path":  "automation/_repostat.ps1"
+                  },
+                  {
+                      "sha256":  "2b203bde1fed0ccbd85bc8ce6923c0066125fe639ba9452fd826229ae845e346",
+                      "path":  "automation/_stopprobe.ps1"
+                  },
+                  {
+                      "sha256":  "4e63c5322a79583c810e2755344d8c3da39ba4b0717795e85169758e12118360",
+                      "path":  "automation/abra_paths.py"
+                  },
+                  {
+                      "sha256":  "13a76871310cb0a65d6064b7e9b78567fecbf167d4957ffd664497d397a083de",
+                      "path":  "automation/abrasax_align.py"
+                  },
+                  {
+                      "sha256":  "5f9f32a68f2f0a49a0664451878c9457cfe8dc1ec4ac07812bb0067a49a7d71a",
+                      "path":  "automation/abrasax_align.py.bak-procmatch-20261101"
+                  },
+                  {
+                      "sha256":  "ab98f2fa3cc689f063d75444549641de9af010a1072411d5350f82dbded9509f",
+                      "path":  "automation/abrasax_align.py.bak-shimpair-20261101"
+                  },
+                  {
+                      "sha256":  "0ed824328fe2faeb1cb027c0489aa00a98362a12711fbd1a1c815171d6e0daeb",
+                      "path":  "automation/abrasax_align.py.bak-termallow-20261101"
+                  },
+                  {
+                      "sha256":  "837db3585341dfda436f0f9a7e46734d7fe4b338261725074bcbedd91b81cdfe",
+                      "path":  "automation/abrasax_reconcile.py"
+                  },
+                  {
+                      "sha256":  "339125318aac51e4e8d015a66ed3d165a78397f1063db1853e30c8710b3027c4",
+                      "path":  "automation/abrasax_singleton.py"
+                  },
+                  {
+                      "sha256":  "aa9da9351dfc33743e056a38d7664e4be6cd969030ff3eae125e2aba00f2197b",
+                      "path":  "automation/abrasax_singleton.py.bak-pidreuse-20261101"
+                  },
+                  {
+                      "sha256":  "5295c4bfa1b418e3798f7d3230b1ae5550b93433764297cb1c2d246f5357f715",
+                      "path":  "automation/abrasax_watchdog_align.py"
+                  },
+                  {
+                      "sha256":  "5e5bcc0191640f52ba51b49a4e2135c78bee00b8c61bac33b40b48f7cfe930a3",
+                      "path":  "automation/abx.py"
+                  },
+                  {
+                      "sha256":  "261ed0a9259543fe26a0a75ba85d193e9ad1ddb14fff18f94774850eca4a0e13",
+                      "path":  "automation/add_coherence_column.py"
+                  },
+                  {
+                      "sha256":  "4310c73ee193177a3f7f49bc4b69a198f81f5f946b3d521118faae61d6eaa5ae",
+                      "path":  "automation/add_local_route_to_router.py"
+                  },
+                  {
+                      "sha256":  "71efc8d8043f367e0a0e871a59a83910f3514add9b3384aeaf68333f057cc781",
+                      "path":  "automation/add_vision_panel.py"
+                  },
+                  {
+                      "sha256":  "cfe1b08053f66727c1ab7e12973e2d0d6eaaa7a8767cb7e06db549ce7d870f78",
+                      "path":  "automation/aed_loop.bat"
+                  },
+                  {
+                      "sha256":  "439d95d6519a53a9c14971daeeb533aa653e5f99211c4db7ac48b8b1073db7f6",
+                      "path":  "automation/aed_loop.py"
+                  },
+                  {
+                      "sha256":  "22940bb7d26e2df90b72214a69e16c76185f70a5791d6027775a930f8c6800f3",
+                      "path":  "automation/agent_run_capture.py"
+                  },
+                  {
+                      "sha256":  "c1a3e6ce0b47c2619651f8a3ead55af8a9aad1113dd86249bb50d9d0f1e81673",
+                      "path":  "automation/agent_run_capture.py.bak-gemma-20261101-213539"
+                  },
+                  {
+                      "sha256":  "15173b83c4b96ffcdb30f87f734329e9630a3cff8c67bf51b3812ec96794a9ca",
+                      "path":  "automation/align_brain3d_tests.py"
+                  },
+                  {
+                      "sha256":  "8caa82b06f76c5391a9c877c19725fd8417eebf5efa4951e66ea250291aae7c9",
+                      "path":  "automation/alive_bind.py"
+                  },
+                  {
+                      "sha256":  "f64665c722a84db349c4eaf80f7fdde5e6da95a67fad9fbfb70c66f5dfdcb374",
+                      "path":  "automation/analyse_doc_index.py"
+                  },
+                  {
+                      "sha256":  "25439e0beb3ccc834d94f27bf390aae927f0bc69c3e3c5e337400d823b6df303",
+                      "path":  "automation/apk_build_loop.py"
+                  },
+                  {
+                      "sha256":  "43a4efb23698a0de7756a229a79ae157492c300a5a85321c6d1cebd5f7f143af",
+                      "path":  "automation/ask_lm_crash.py"
+                  },
+                  {
+                      "sha256":  "77d86c429ff218b63d7c396cee4c5d4ef7af752ef0003e2b8acab5364c6f0ea3",
+                      "path":  "automation/attach_floating_renderer_to_scene.py"
+                  },
+                  {
+                      "sha256":  "72f3a69714be57f2a029e8da038425117ba3aaa81363484d66d889ac85aca76f",
+                      "path":  "automation/attach_floating_renderer_to_scene.py.bak-20261017-2312"
+                  },
+                  {
+                      "sha256":  "3b3445bb893abe396db7cc4a97f8661834cd08b0e9a25dae024f82a40d3c0dbd",
+                      "path":  "automation/audit_config_secrets.py"
+                  },
+                  {
+                      "sha256":  "68380c2bb7230880c022cba8397c1eef90e367f7cf875ac420855220fc0fae2a",
+                      "path":  "automation/audit_dependencies.py"
+                  },
+                  {
+                      "sha256":  "b5e8d6bc0c71dd96f686f49de76672659a0f1a5d1450b4e25afef771399ee470",
+                      "path":  "automation/audit_dependencies_missing.py"
+                  },
+                  {
+                      "sha256":  "b61240be50f39fc150a23dd26b0b33ec05a993cc5f3cce8cac236da82f75b4c8",
+                      "path":  "automation/audit_docs_corpus.py"
+                  },
+                  {
+                      "sha256":  "979f8b189099555952681f659c04a4cb5d60ec4b76e1a6efc63d8b631422abb7",
+                      "path":  "automation/audit_docs_corpus.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "9f91aaaf1982d36cd90c8c1bf24d588623e39419d3d9f824191b0843567e5ca9",
+                      "path":  "automation/audit_env_process.py"
+                  },
+                  {
+                      "sha256":  "5bbd9e6ae1fafc73f44e5db69e191f1a48509221d95c4c9eaf2c0db471f84e9d",
+                      "path":  "automation/audit_gpu_acceleration.py"
+                  },
+                  {
+                      "sha256":  "2ec7cb1c8ed59182019caae94b7ea245c47e6e4ec3743ecb8867db1eeecf1df1",
+                      "path":  "automation/audit_imports.py"
+                  },
+                  {
+                      "sha256":  "9ad051380842c395d4ec9752d78d15c23b5252cdfcc7e6cf36a5d879d3290232",
+                      "path":  "automation/audit_launchers.py"
+                  },
+                  {
+                      "sha256":  "34b7f4e42771366213dfd5c24772dc6ec9d75ba31fac004a3144c3ff8e26a3b3",
+                      "path":  "automation/audit_llm_agents_hardware.py"
+                  },
+                  {
+                      "sha256":  "9fe243c6a1d0b7b185382630d5fadd544d70a96be0e2eba2a198babf046650df",
+                      "path":  "automation/audit_preload_swap.py"
+                  },
+                  {
+                      "sha256":  "6a1e47cf05a3663c422ed12fd55c6e964d5683e4bf738dd7767527a27311eff8",
+                      "path":  "automation/audit_preload_swap.py.bak-gemma-20261101-213539"
+                  },
+                  {
+                      "sha256":  "95ee009a1e5127d3381a1b2d2189cccd62fd5bb9dd4c7dc4e8ade65e1410ad8b",
+                      "path":  "automation/audit_soul_fix.py"
+                  },
+                  {
+                      "sha256":  "50293f486869bb089031234966568e43bf7b68805c78124c78b8ce9384b60ce4",
+                      "path":  "automation/audit_source_control.py"
+                  },
+                  {
+                      "sha256":  "b490e8dc259745325d5b6d7dc18345bf923abb65f124abbee8383d684676066c",
+                      "path":  "automation/audit_testing.py"
+                  },
+                  {
+                      "sha256":  "53ba2358eaafd6e8ff20f4a8e3c07a5b46dc76db723e93847592464e723004ca",
+                      "path":  "automation/audit_tpm_reality.py"
+                  },
+                  {
+                      "sha256":  "161cfd6b945204e7bb5ad8e2f7ffaeba50918894913e31164bf7c3f875f60f7b",
+                      "path":  "automation/audit_tree.py"
+                  },
+                  {
+                      "sha256":  "880a300b092cbc97a5163fdd43cb71d00f597e52c805e93cfde2f43a2a668d75",
+                      "path":  "automation/backend_attest.py"
+                  },
+                  {
+                      "sha256":  "2dd80efe6fb26fa8004adc7b562a75da31df0c57118275309822b21725203a6b",
+                      "path":  "automation/baseline_morph_capability.py"
+                  },
+                  {
+                      "sha256":  "c6d39ad85fe4d05d4ffa735a68d980ea9d080fde6a8eb9cfa6a1d79aaf2128d4",
+                      "path":  "automation/bench_models.py"
+                  },
+                  {
+                      "sha256":  "d2519a68f97075e89619eb4549715b85a8a3fbe692fee11e18da031af5fd3b36",
+                      "path":  "automation/bench_models.py.bak-gemma-20261101-213539"
+                  },
+                  {
+                      "sha256":  "bd526d1fef15aa20e00f1b8819304df23ec9e2f167d5519b1df51e8b34cc45ad",
+                      "path":  "automation/boblight_check.py"
+                  },
+                  {
+                      "sha256":  "06ce9a477bba6fd0a98747da4a4a80a83d2018ad473e6153130e915255630e73",
+                      "path":  "automation/boblight_conf.py"
+                  },
+                  {
+                      "sha256":  "9f6a2f54b766991eb8436f55360dab5562a6609279667ef318207fdb53695bd0",
+                      "path":  "automation/brain_automation.py"
+                  },
+                  {
+                      "sha256":  "b80ca67892a251b3a043d3ace405f384dba8856506a4978f394b1ec41089cde1",
+                      "path":  "automation/brain_automation.py.bak-20261018"
+                  },
+                  {
+                      "sha256":  "762153aade38636a1a885d8957b1e6458dac2bc2a1fbbce9020ce1130b7d3262",
+                      "path":  "automation/bt_progress.py"
+                  },
+                  {
+                      "sha256":  "113d2de7168c4f8dfad56c570e21b13c7ad1d21caf3e52bfcc29dbe9d3c58c86",
+                      "path":  "automation/build_gate.py"
+                  },
+                  {
+                      "sha256":  "6375140f8a2d41e5b3dfca936291ac62b3b39a72731b0f99e9232f79a65ded53",
+                      "path":  "automation/build_llamacpp.bat"
+                  },
+                  {
+                      "sha256":  "d8111617c8a01ff49bd2dbd1b511354a85af881238fb1d9e22612cbd304505cb",
+                      "path":  "automation/build_ui_brain.py"
+                  },
+                  {
+                      "sha256":  "db9e712aad58cc7fef30194d4e5eaba581fc111470664c8655eb8088d7ce9873",
+                      "path":  "automation/build_ui_brain.py.bak-20261018"
+                  },
+                  {
+                      "sha256":  "7e7da977f8af9332a79e1f032b4884d6d89d18fd0acccdae0ceca779812db803",
+                      "path":  "automation/capture_overlay.py"
+                  },
+                  {
+                      "sha256":  "7fcf00a207def3416b31e4518d04e05be3ef9bad3c601cc36b4e9c45f85c4f4c",
+                      "path":  "automation/check_abra_paths.py"
+                  },
+                  {
+                      "sha256":  "ef3434c16c8baab8e1136a7504a070d98401b12f1d34bcdf075d85c8278776d5",
+                      "path":  "automation/check_ai_drives_brain.py"
+                  },
+                  {
+                      "sha256":  "af3371b92cd8e949052817e4ad54d572070cb8d22979f8a82c9de1667e10744c",
+                      "path":  "automation/check_alive.py"
+                  },
+                  {
+                      "sha256":  "4321d9c2054ad3bfd3911c688f38d70f3e3939d08617676a51040a442c6ab2ea",
+                      "path":  "automation/check_build_gate.py"
+                  },
+                  {
+                      "sha256":  "7bb20d79f7c5f57fd09cbd81620d74afbbabbbe67c1f74c9e397558e8cdd5296",
+                      "path":  "automation/check_desktop_launcher.py"
+                  },
+                  {
+                      "sha256":  "6489d7699771aadb1706ea69f1614518faf3656a9c50181cf33ca87ed2d8164d",
+                      "path":  "automation/check_doc_index.py"
+                  },
+                  {
+                      "sha256":  "a291b0f6154daad8369157e45023bd3c0cdcea7c15ba8bb84dacbaaef16f2450",
+                      "path":  "automation/check_doc_verifier.py"
+                  },
+                  {
+                      "sha256":  "beeea01fa34f2a3c624f037039bf5f1b9fe5bcc72d7a62521ef2beb8c6ea7909",
+                      "path":  "automation/check_installer.py"
+                  },
+                  {
+                      "sha256":  "a372a6da7b9b9723b43db8ab8a89de4cd8e70f498c2df8f340b322254125f150",
+                      "path":  "automation/check_json_guard.py"
+                  },
+                  {
+                      "sha256":  "b0ffd50e46ae8173e7d0464db0938467eb18bb1e999f0e84a7dc8cad4333e503",
+                      "path":  "automation/check_launcher_pairs.py"
+                  },
+                  {
+                      "sha256":  "b3225e459c3a0796e8c5bb764d417c10565419d390f2ad03eae864de25389525",
+                      "path":  "automation/check_mem_governor.py"
+                  },
+                  {
+                      "sha256":  "5cc9c25b58cc522a5ff83330df5d5cca1a39ad6799db82cc5081a6fbd13a02b7",
+                      "path":  "automation/check_repo_secrets.py"
+                  },
+                  {
+                      "sha256":  "7c3b9044c0d284e475459764a0701d27b981bfdb27c3c91bd4bcf76fd61b92c3",
+                      "path":  "automation/check_repo_secrets.py.bak-fixtures"
+                  },
+                  {
+                      "sha256":  "b4c4af3cd3aed6c3dbc511cb90bf4ccbf3751cea3402d152f22d8cd870365bfb",
+                      "path":  "automation/check_secret_rules.py"
+                  },
+                  {
+                      "sha256":  "57082be3e74b7e08014ac9b7bb8df473e31cef892fa8139b3b9f71f27dc7f98c",
+                      "path":  "automation/check_string_brain.py"
+                  },
+                  {
+                      "sha256":  "cc98519f004946223863ceffccf6c4bb1a03e8cbc1e8c4b721d4f37f386aa39d",
+                      "path":  "automation/check_tree_organised.py"
+                  },
+                  {
+                      "sha256":  "b3dbfb753ba1a81bfe020eeea02f65cdf806782c20554d0f978defec2edc7b2a",
+                      "path":  "automation/check_unity_proc.py"
+                  },
+                  {
+                      "sha256":  "7639f7ad79e03e9f8ffbd7ec3e86e8129186358bed58b00076feed46acfc9342",
+                      "path":  "automation/check_unity_script.py"
+                  },
+                  {
+                      "sha256":  "97f00b73828bd87544b81f4a524fb0eaab5ee1691806186af847be1360ce3ce9",
+                      "path":  "automation/check_winproc.py"
+                  },
+                  {
+                      "sha256":  "c67d30b2de662a2da06c04fc2a5a48666c7c99b8f6b77ddd12e3096315de24ba",
+                      "path":  "automation/classify_doc_only_ports.py"
+                  },
+                  {
+                      "sha256":  "25348e05d0a715a19d3869128034746d206c04cd97b48cdd5b181db5cd2f2549",
+                      "path":  "automation/clean_telemetry_gate.py"
+                  },
+                  {
+                      "sha256":  "ad198cd1d9ace362e2110766aab4f4ed7715e2b7e6305fb295f0ac8ab32d912a",
+                      "path":  "automation/config_audit.py"
+                  },
+                  {
+                      "sha256":  "01caa704583956f651ffba1d75262f5023b468b9330eac629041852b73a46ca8",
+                      "path":  "automation/configure_zero_cost_chain.py"
+                  },
+                  {
+                      "sha256":  "3dc69b375469477be93b3de2cca9c8b5b9f1c8411ea848e41a22a7cafae3c7e1",
+                      "path":  "automation/configure_zero_cost_chain.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "31824464d078dc8484bd8434fe0aa176f5806a6edcefe0841281c61afdace0be",
+                      "path":  "automation/correct_stale_docs.py"
+                  },
+                  {
+                      "sha256":  "4dd49e7f4a3424f98879de44503e8f8e25d1145bc02a7ae430febdb13c7c7b54",
+                      "path":  "automation/cost_ledger.py"
+                  },
+                  {
+                      "sha256":  "b91a916b46d060d57991c0e86b34c4b4f0cb84e9a020b4cb72492f1fcee1c60a",
+                      "path":  "automation/count_shim_exports.py"
+                  },
+                  {
+                      "sha256":  "83effdb959ca4df716be7313f9488ea2f42c179ad958425f9b2cf4bdc6384e24",
+                      "path":  "automation/count_shim_exports.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "a3ba2792c5ef059618507eedd158448fe041fdce70743ac7e84a9271ea842b0e",
+                      "path":  "automation/cpio_boundary.py"
+                  },
+                  {
+                      "sha256":  "c349f8b5711b4221678bdc68a040f2049879b667912cf7aaa5f436ee11bd6aea",
+                      "path":  "automation/debug_loadcmds.py"
+                  },
+                  {
+                      "sha256":  "479abe8c6806b447f2855210e6f8a1acbe45ed5b17a0775c8306e8671be15f2f",
+                      "path":  "automation/debug_loadcmds.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "6b8bd5aeefffa4020c4d395002967366439aebaede6d1168822b0732e63dff1f",
+                      "path":  "automation/decode_vectorramp.py"
+                  },
+                  {
+                      "sha256":  "08eac7a495db03eb1401615e97a9f41e5928c3cf500c244aadad18c3273d9f00",
+                      "path":  "automation/decode_vectorramp.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "bc64b74bf4bbc29254be8c9274251c0ab60394dacfd65bafcd352ff843641fed",
+                      "path":  "automation/dedupe.py"
+                  },
+                  {
+                      "sha256":  "bfbeeb2cd893f23a48971526aea1216a3cbe6666884af39bc0c3929cf4518b83",
+                      "path":  "automation/demo_bg_launch.py"
+                  },
+                  {
+                      "sha256":  "65840a8d6158b076807be9f00c98071f7023f2857b8646590f3df7bc8241a09c",
+                      "path":  "automation/device_inventory.py"
+                  },
+                  {
+                      "sha256":  "177c2e039972fd1d7d3c285c90eca6a3f208cad8d08a2e2598e35e9f37c4d17d",
+                      "path":  "automation/diagnose_archive.py"
+                  },
+                  {
+                      "sha256":  "a59ab64ff39bb47a3c340bdcb5359133dfe02cdc1349426d1103a7a8b7e8b692",
+                      "path":  "automation/diagnose_cycles.py"
+                  },
+                  {
+                      "sha256":  "70bfe8af9263f3bbf4a90efbf73d50ea5696374a27fdff9061f1fa213b5ac5c0",
+                      "path":  "automation/diagnose_defect_zero.py"
+                  },
+                  {
+                      "sha256":  "f545f7f7077c8d4a9647dcd19831591b264b0a63604af348ce783d9541299590",
+                      "path":  "automation/diagnose_fallback_stop.py"
+                  },
+                  {
+                      "sha256":  "22b051cf7feca27a66c1e496bcb50e34d64f10074a1f920d570689efb781fc69",
+                      "path":  "automation/diagnose_import_scan.py"
+                  },
+                  {
+                      "sha256":  "808c2cd4789ad9a9b31c67ee5b94da83d666436e50d44d22d4cf8aec023886cc",
+                      "path":  "automation/diagnose_json_guard.py"
+                  },
+                  {
+                      "sha256":  "7cbd12fe444db4f8baff0e914cb0913bb9f971c44527fee684290ab632c82e24",
+                      "path":  "automation/diagnose_lmstudio_400.py"
+                  },
+                  {
+                      "sha256":  "bbfebb645e7d542d9dcc35182777c1161b7572c47b9a6019b00fa1ef3ab9b89d",
+                      "path":  "automation/diagnose_locked_disagreement.py"
+                  },
+                  {
+                      "sha256":  "ff9549187faaae66ee1e4f1ec07d49b2ed3fcea3bd43fa151e37b61fc610605a",
+                      "path":  "automation/diagnose_model_files.py"
+                  },
+                  {
+                      "sha256":  "e5cc772b217013e72e63a716972d60d0323db0b4fd06a99b0c85e04047ddee79",
+                      "path":  "automation/diagnose_model_load_failures.py"
+                  },
+                  {
+                      "sha256":  "aa94cf48a8d6042666c8a3c1034d5fe18c8a9a599a22ea2f08bc7f47d386d0a2",
+                      "path":  "automation/diagnose_nvidia_404.py"
+                  },
+                  {
+                      "sha256":  "45d851ca45c1de6dc78582a6c2204797a0995e8af93ebb05537f1229ad65b915",
+                      "path":  "automation/diagnose_pattern.py"
+                  },
+                  {
+                      "sha256":  "00067bf35d5407bad0f0e7f2cea53fb478f5dcc070e02d7544aa2969919b8dab",
+                      "path":  "automation/diagnose_queue_model.py"
+                  },
+                  {
+                      "sha256":  "4387a7dd384221877fef4e5cdb9d12af0789c4f31042a5bc20a6c5f64dd85084",
+                      "path":  "automation/dir_size.py"
+                  },
+                  {
+                      "sha256":  "260718a6534f65222997078e9b0d90acab425439c2d681a58cb5c67a1007afac",
+                      "path":  "automation/disasm_stubs.py"
+                  },
+                  {
+                      "sha256":  "3f8f2e4eab5163e04796c658adc9e589e596119c648d1375d7e79885af179d5d",
+                      "path":  "automation/disasm_stubs.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "1cffd99519b39541a89b6a274dab7db4bd8b682c84ea50050bd7e53572741451",
+                      "path":  "automation/disk_targets.py"
+                  },
+                  {
+                      "sha256":  "e710dc97bd655d19eb2c7aac442ed42731ff86679df91bf247c87a996d63b58e",
+                      "path":  "automation/disk_targets.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "f10a05b7d9506647721f3aecd7329659b4e4c571cda83efb8c86a311c9b373f8",
+                      "path":  "automation/disk_top.py"
+                  },
+                  {
+                      "sha256":  "7615e2e660a9ea4267e7e7c19a7e6c8176a3742a61a24c6d0467338419015423",
+                      "path":  "automation/enumerate_legacy90.py"
+                  },
+                  {
+                      "sha256":  "777d82d1c28fdd70b156400cae16126e81aaf9a7ed7c882ea1527a6ea2c663c1",
+                      "path":  "automation/enumerate_legacy90.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "f7d27ceccf75e9f4069db7a4f6ca8012e77ef2bf77082b9899936eef114623cb",
+                      "path":  "automation/extract_ui_skills.py"
+                  },
+                  {
+                      "sha256":  "2d26fe5d58b04f7ef5758bd3afe0dea43645a6c46ca5058be1214f198c1d5ee9",
+                      "path":  "automation/final_model_state.py"
+                  },
+                  {
+                      "sha256":  "c26101062aee5015621b70dc2e69fb475520ab7418dc88143a628cbd707bbead",
+                      "path":  "automation/final_model_state.py.bak-gemma-20261101-213539"
+                  },
+                  {
+                      "sha256":  "96b6ed3ae7b41f23ffdc8783fe682b84c14d1217bb8362096d60d93963a930f0",
+                      "path":  "automation/find_boblight.py"
+                  },
+                  {
+                      "sha256":  "14ed586fc49126d83bcd3571e215393b09bf14735a9069e8beb3f817ea592ec4",
+                      "path":  "automation/find_boblight.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "42dc74d5b0a3d955b7ef37ada350084fc5b966cb8e5e451195a7d7858bf220b9",
+                      "path":  "automation/find_unity.py"
+                  },
+                  {
+                      "sha256":  "cd62b50c14518f92453492436d8456daa896318741b82c2724749ea3c63b30ed",
+                      "path":  "automation/find_unity_hub.py"
+                  },
+                  {
+                      "sha256":  "afc800f0d4393172782553d6b0a831928a5047d1fd58fb8b1eb15ec416acf7a6",
+                      "path":  "automation/fix_8777_wording.py"
+                  },
+                  {
+                      "sha256":  "c9723eccb166288db40fedaa32a6730c0efd2d480eb4b2085e676fc4a2b4a65c",
+                      "path":  "automation/fix_archive_checks.py"
+                  },
+                  {
+                      "sha256":  "32bf0628e7ceff4b0cf4dbc71b1832a32cf8c939f27870fd863497e5a69524d6",
+                      "path":  "automation/fix_audit_config_scope.py"
+                  },
+                  {
+                      "sha256":  "26934c31eadb05cad8239af4bdc056ab0bce63287e4b19b7642add211ca23e0b",
+                      "path":  "automation/fix_audit_config_verdict.py"
+                  },
+                  {
+                      "sha256":  "0820c8dc3b20d04f130c562757348789bf7ba18cb92c7a40e4b533d17ad52222",
+                      "path":  "automation/fix_audit_import_probe.py"
+                  },
+                  {
+                      "sha256":  "57ab23202bc526abc98f1c0971ce3b404de4d1e7bfa8e36baf0707de85da66fc",
+                      "path":  "automation/fix_audit_importfrom.py"
+                  },
+                  {
+                      "sha256":  "bb9a6929e3d669dc66457a5bfa5144f8212708f3084bbdf598b1d03db4b86778",
+                      "path":  "automation/fix_audit_sc_finish.py"
+                  },
+                  {
+                      "sha256":  "31444501877192e96a407cc2328e6ff66ac52ec6a42c1951283645153cd85a8b",
+                      "path":  "automation/fix_audit_sc_rules.py"
+                  },
+                  {
+                      "sha256":  "97736fffabeda63db486b683f036a4458b4adfaef4e018745e44ba8ac744ae4c",
+                      "path":  "automation/fix_audit_sc_speed.py"
+                  },
+                  {
+                      "sha256":  "f75fe4233e3c876df497d97943862a3d0a4e15853155a0b5ea6986da13b382f8",
+                      "path":  "automation/fix_audit_section_b.py"
+                  },
+                  {
+                      "sha256":  "90eecccf2e68409f2e4d17a9c2aafc3f9328672bc83e428fee80fea79f0a1261",
+                      "path":  "automation/fix_audit_shared_rules.py"
+                  },
+                  {
+                      "sha256":  "a0acedb215ebb0c9e383ed4ec09e4557cf98d2c3c63417fcf973a4b115070e23",
+                      "path":  "automation/fix_audit_test_smells.py"
+                  },
+                  {
+                      "sha256":  "7bcfd0c1af998fe4dfdc215302f82d748ad982104d746a68f31798f2e8084a3c",
+                      "path":  "automation/fix_brain3d.py"
+                  },
+                  {
+                      "sha256":  "bd782a134928a4e5cc0a3eac749afdafd5a51c4ffa188b5e265b8fadbff650f8",
+                      "path":  "automation/fix_brain_singleton_bus.py"
+                  },
+                  {
+                      "sha256":  "f371c7461be3523cf59293244825b7b042203f8cd3603c399bd39aa122b2dc22",
+                      "path":  "automation/fix_catalog_load.py"
+                  },
+                  {
+                      "sha256":  "4cbc80cca1120f5a47b27998bd14b1b4111f8b1b1583e892a892a2c78c368d8d",
+                      "path":  "automation/fix_cbm_bridge_test.py"
+                  },
+                  {
+                      "sha256":  "6b2c452d76439a61245ab8c20386fea601fcf8f692eeed672369344dc918d64c",
+                      "path":  "automation/fix_dll_url_search.py"
+                  },
+                  {
+                      "sha256":  "bf35c66d7f8930eaad40bd270278498f9735b3ba7e6951aad1f8db5aa42a3e2b",
+                      "path":  "automation/fix_dual_brain_writer.py"
+                  },
+                  {
+                      "sha256":  "81464e8ca7336f4e7e480ae59cb401f2297438aa159e6d157e5d202112960bd2",
+                      "path":  "automation/fix_env_default_detect.py"
+                  },
+                  {
+                      "sha256":  "9151b81c50366c917ba6a5e588c1ce6c72a96e76307c7f78c098ab849a4ed58a",
+                      "path":  "automation/fix_exe_probe_stderr.py"
+                  },
+                  {
+                      "sha256":  "37ad18f775a1a5a3f35c834122e8813916915da28012d00263206571107623a7",
+                      "path":  "automation/fix_fb_server_exclusive_bind.py"
+                  },
+                  {
+                      "sha256":  "d1556984a60e0e4ac4d6c8fb11f6353217fc1a55a986e70bf891f44702899537",
+                      "path":  "automation/fix_gate_timeouts.py"
+                  },
+                  {
+                      "sha256":  "26a3725d009a38dcaf9b56ed1adeaf096de6da03febaa3a51697053844e5ed52",
+                      "path":  "automation/fix_gateway_basename.py"
+                  },
+                  {
+                      "sha256":  "d1ab79b0da6eba01cac7a2d4f54cfd2bebc1591d28b01f2fd6f4d6f7136adfc6",
+                      "path":  "automation/fix_gateway_model_route.py"
+                  },
+                  {
+                      "sha256":  "fd1d8e391a9a42afe5bd64284a2f7ce5ec7bae4530c31a9e7f77ce448aabcc2c",
+                      "path":  "automation/fix_gateway_provider_default.py"
+                  },
+                  {
+                      "sha256":  "a888125281150fa90d61a1dfef3d19819bc6ee7e41ea81499cb256f6bcb3b707",
+                      "path":  "automation/fix_gitignore_unreal_source.py"
+                  },
+                  {
+                      "sha256":  "85fecb02413bc8bf69ed9fd9e115f4847c066c3853c8096108885b3d7b8b4d64",
+                      "path":  "automation/fix_governor_selection.py"
+                  },
+                  {
+                      "sha256":  "6af3e4a28a89b7f432b6d7b929960258d459d7b2a6f6b863e1fe19b0c768c6e2",
+                      "path":  "automation/fix_health_lock.py"
+                  },
+                  {
+                      "sha256":  "4c04857ac43a8dc41a1027dc74a9cda3381bd0ed8d55e9cfbd85b8c93a7f165e",
+                      "path":  "automation/fix_hydration_unfold_edge.py"
+                  },
+                  {
+                      "sha256":  "fdc02577d7ecd44d9f3e6b6b6042f951b4a3adbbf00731b5c6822718d33b5043",
+                      "path":  "automation/fix_json_guard_real.py"
+                  },
+                  {
+                      "sha256":  "fe61dc0992632517cef7b8d06289ee115a8f38808fba4590a7bbf909be7208d7",
+                      "path":  "automation/fix_json_port_noise.py"
+                  },
+                  {
+                      "sha256":  "7e4c34cf35f9cc582974f63ff33c40b0e87fc7939f47fd03eee24acee5ab2ac5",
+                      "path":  "automation/fix_launcher_timeouts.py"
+                  },
+                  {
+                      "sha256":  "244b52806c68303a22deb9cd5fcdc201c83ddc4858629792a91e2ea6250f3aab",
+                      "path":  "automation/fix_llama_notes.py"
+                  },
+                  {
+                      "sha256":  "14530b16e6a1722047ca58a5e59ec7b4541e55ac7c8a6d4d4de11eafb6e61e18",
+                      "path":  "automation/fix_llamacpp_model_path.py"
+                  },
+                  {
+                      "sha256":  "2e26ff05e382fcee9971bfb9de3e1d1ecfbe74841b8410e54c7e048039cbc06a",
+                      "path":  "automation/fix_locked_label.py"
+                  },
+                  {
+                      "sha256":  "55d903ba54763a992791ce8a8d70471bf0c999c8489ab53ef8766cfa1253f525",
+                      "path":  "automation/fix_lookbehind.py"
+                  },
+                  {
+                      "sha256":  "5eab9aeafcec67a7d8a4717be9d2363e8de5e69fb1c3a455b49b9815c96008a9",
+                      "path":  "automation/fix_manifest_reproducible.py"
+                  },
+                  {
+                      "sha256":  "8da9194b69529cc6e078f32858346a5b5fa85c549e256cb5e3c48ba93ccc2a33",
+                      "path":  "automation/fix_master_autonomy_import_sleep.py"
+                  },
+                  {
+                      "sha256":  "1c7b8868c55d36c089b14fd2ceadfe22b39a407bd97c7fa27682eb9fd9694277",
+                      "path":  "automation/fix_mesh_latest.py"
+                  },
+                  {
+                      "sha256":  "2362c715888796159f361704137de5107007f61b1b51c5ec1e5bf893297fe7ca",
+                      "path":  "automation/fix_mesh_pat.py"
+                  },
+                  {
+                      "sha256":  "5b3db8cce240e27d106f70224c123077616840495a81bf8075d11cf59b731915",
+                      "path":  "automation/fix_mesh_render.py"
+                  },
+                  {
+                      "sha256":  "9e9b814d08a4355831d709bc37397604d9f120aca1ad42d7ab20724284404608",
+                      "path":  "automation/fix_meta_check.py"
+                  },
+                  {
+                      "sha256":  "5f960f34a0217dabe6fa599448b9463957680a0e99a31011bb392fff310d81e4",
+                      "path":  "automation/fix_migration_breakage.py"
+                  },
+                  {
+                      "sha256":  "6b05fd07b920cf6187da44c542884e30403b8ce5859d53c323b7372b03d2498c",
+                      "path":  "automation/fix_morph_const.py"
+                  },
+                  {
+                      "sha256":  "f97cf842130371503ced65e3bc893d1f25fe258a5650b485940259c31506613e",
+                      "path":  "automation/fix_morph_demo.py"
+                  },
+                  {
+                      "sha256":  "26656b44748936785499397ba5fe739dcf09135fdc161d66be034bb4d9d7ce05",
+                      "path":  "automation/fix_native_selftest_assertions.py"
+                  },
+                  {
+                      "sha256":  "b3298e531665895fb920854bf29c8ae2a23f6b578939b044716dc4b6f34227e0",
+                      "path":  "automation/fix_neo_loader_test_root.py"
+                  },
+                  {
+                      "sha256":  "5800b7d9f79d9cd3364b867acc11112c53580925c095356ecccc06938c819972",
+                      "path":  "automation/fix_ops_monitor_start_verify.py"
+                  },
+                  {
+                      "sha256":  "21a3ab6bfdc9966cb807624b42406723e2cc1e06c6b228d843db1bd1fa747124",
+                      "path":  "automation/fix_optional_imports.py"
+                  },
+                  {
+                      "sha256":  "982005fad830a50ea6d67f201fcbb9d68a2d3911612d054c7f2d83148edbe969",
+                      "path":  "automation/fix_overlay_import_order.py"
+                  },
+                  {
+                      "sha256":  "4b9484ad65f0b23c9ef4c1a74d2ffacc346d95ee28704542cd9d4c3d7824ba06",
+                      "path":  "automation/fix_path_exclusions.py"
+                  },
+                  {
+                      "sha256":  "66320a0e67cd0d39e4dd95e400fcdc410e9d852b60720ccf332ee8813fbfe169",
+                      "path":  "automation/fix_port_extraction.py"
+                  },
+                  {
+                      "sha256":  "ac6206bef1da4ee0b1a0676bd6969390f5f42eaa0f36a3f9475873a3b0d424fa",
+                      "path":  "automation/fix_port_final.py"
+                  },
+                  {
+                      "sha256":  "74c6909a0016b4289a749bc094af0048755e4c7e82c9d05d067c1bbbd3128073",
+                      "path":  "automation/fix_port_open_lock.py"
+                  },
+                  {
+                      "sha256":  "97fbe1766bd17cd150f00c929fd5370444a6324cdb169ed124a97de41387d5d4",
+                      "path":  "automation/fix_providers_note.py"
+                  },
+                  {
+                      "sha256":  "859cbc37d893be92f91dfbc134578848f895984cee3f611a25999732915b4a63",
+                      "path":  "automation/fix_providers_stale_paths.py"
+                  },
+                  {
+                      "sha256":  "3fe7f44c82cce5e0ff80831a441baaeaa72334a5b7abe3dba8ef785eecba10a1",
+                      "path":  "automation/fix_redact_scope.py"
+                  },
+                  {
+                      "sha256":  "26c81ef170be041d630cdf9a2be1eac9b0447e5c5fe284b9d6743142834a55eb",
+                      "path":  "automation/fix_relative_imports.py"
+                  },
+                  {
+                      "sha256":  "ea14437b571ccd44164104e82be9eb3bd4777ccb0463af6629d83268d0f9f041",
+                      "path":  "automation/fix_router_substitution.py"
+                  },
+                  {
+                      "sha256":  "0eca5a813f18489e22fcb2051d25d0d867f89fe69bc2fff09a436628b1c8a6a4",
+                      "path":  "automation/fix_routerfail_exclusive_bind.py"
+                  },
+                  {
+                      "sha256":  "c3ef2f8d43277de16de656e6e92046d10a1ae04ca3a18e26bf65377f1a79f556",
+                      "path":  "automation/fix_scene_checker.py"
+                  },
+                  {
+                      "sha256":  "4052c2bdc9f769581ab687e4b377f6906a86d47a5a5063d36a2e21f1e58307b0",
+                      "path":  "automation/fix_soul_audit_syntax.py"
+                  },
+                  {
+                      "sha256":  "0c4d10b18bac008592335bd92b353cb8b511f60daa773ec2b89a5d711c0e5f41",
+                      "path":  "automation/fix_soul_lock_cpu_serial.py"
+                  },
+                  {
+                      "sha256":  "e7ad781ba6534046f3d88c4d8c67760f7df7ee34e7d20bda0b9d746143521f5e",
+                      "path":  "automation/fix_soul_lock_ps_quoting.py"
+                  },
+                  {
+                      "sha256":  "5f3fd0a2d5b4002fdbf5f1131818055490772a44261b17ef6b16ae8fc18e99a5",
+                      "path":  "automation/fix_soul_lock_slow_powershell.py"
+                  },
+                  {
+                      "sha256":  "2dfff0ad139058b95e815efa342429743b890f5eba0dd0eb51c23dbd47872f3a",
+                      "path":  "automation/fix_soul_lock_stable_mac.py"
+                  },
+                  {
+                      "sha256":  "fdaaf72451bebd1806d848877fc222d9e60087989aa37a9578629ae20120818e",
+                      "path":  "automation/fix_src_line.py"
+                  },
+                  {
+                      "sha256":  "682d38a4e85e603a353b9ddaf5d88224d11dc56eeb445fea1fba2217dfd0107b",
+                      "path":  "automation/fix_status_vocabulary.py"
+                  },
+                  {
+                      "sha256":  "c74a953cc5b3ed0dc4ce82e66f5717a329921f1cd4b562666242a0b523d6e779",
+                      "path":  "automation/fix_stub_events.py"
+                  },
+                  {
+                      "sha256":  "a1396b58518f330c6b4cb11068792957ff369eef06a12ff2e40982e5433adf1b",
+                      "path":  "automation/fix_supervisor_exe_msg.py"
+                  },
+                  {
+                      "sha256":  "47bca41b29cd1bb8e39c010e49f663c53b9dc28013c20396e49d3dcf65a3e18f",
+                      "path":  "automation/fix_supervisor_exe_probe.py"
+                  },
+                  {
+                      "sha256":  "6fd04350e02c594d135594e33bded25a091f8bea306a87abe94c70dd715414f9",
+                      "path":  "automation/fix_supervisor_preflight.py"
+                  },
+                  {
+                      "sha256":  "74bf304d79da5aa2b425fc0762b72226715489f42e905ef092ec91d3d84b3df1",
+                      "path":  "automation/fix_table_matching.py"
+                  },
+                  {
+                      "sha256":  "c6ea54df1d762ee4b7b5b31c1fe575354853cb6b38f90538f998c7552ead1811",
+                      "path":  "automation/fix_third_brain_writer.py"
+                  },
+                  {
+                      "sha256":  "b1cd1403b43906cd9ce1c93ab04f61f6d9f0f24969c94b39534a889900240481",
+                      "path":  "automation/fix_tpm_probe.py"
+                  },
+                  {
+                      "sha256":  "282e31d5af86f3fa871583ab50cdf9144657e2f4eafae7e6c8dc1828c2582de0",
+                      "path":  "automation/fix_triage_fixtures.py"
+                  },
+                  {
+                      "sha256":  "fc8879fe843ebc66e77df0f940bc8f5152192614e665bfaa16b6a53a4b822e51",
+                      "path":  "automation/fix_unity_events_using.py"
+                  },
+                  {
+                      "sha256":  "fc199073310b91c9e43333983faf6497864a8fd45383dfc3837be62068dba1c8",
+                      "path":  "automation/fix_unity_events_using.py.bak-20261017-2312"
+                  },
+                  {
+                      "sha256":  "16d6d586260785c56022276902df4320514605f5fc8e5274b80237b6415a7591",
+                      "path":  "automation/fix_unity_proc_check.py"
+                  },
+                  {
+                      "sha256":  "5482e9b1dab9e0d39d5f59417fd457a227d7b7d27cc4c4e3897e61a3ca50e5d2",
+                      "path":  "automation/fix_unity_productname.py"
+                  },
+                  {
+                      "sha256":  "25a6b6453617481335be509ff629b5eae684e9c29da059a67f6e60270704d929",
+                      "path":  "automation/fix_unity_productname.py.bak-20261017-2312"
+                  },
+                  {
+                      "sha256":  "4e2760e7040a8c175a7d56b22a72325204677be30a8cb710108cae5b1b5025ec",
+                      "path":  "automation/fix_verifier_reviewed.py"
+                  },
+                  {
+                      "sha256":  "d54a3d48976a05fcb71b87728eb8e819da7de85e05e136dc1d65e61bf7afc7f2",
+                      "path":  "automation/fix_vocabulary_narrow.py"
+                  },
+                  {
+                      "sha256":  "f9702cd8ee30c4019179352a88d37d3144a524a5655a2505661a0a69752a133a",
+                      "path":  "automation/fix_vram_live_budget.py"
+                  },
+                  {
+                      "sha256":  "635b10ea7a170390c86387e46bdec2879dfff4f61f387176dd36773844dabdc7",
+                      "path":  "automation/fix_vram_probe_timeout.py"
+                  },
+                  {
+                      "sha256":  "67d54eb8b604251e0f6d5a0de31e3f6346f8cf672a9a38e7a65eafd125bf5d94",
+                      "path":  "automation/fix_winproc_check.py"
+                  },
+                  {
+                      "sha256":  "5d58aab3efb8d62704c396e6b184477bdb0daa7e78cf7469adcee6f1d46807f5",
+                      "path":  "automation/fix_winproc_check2.py"
+                  },
+                  {
+                      "sha256":  "8e7551e4923f0c898456fa520a263810d6e95b83d3d77acdeb8fa9e4ebdf3d29",
+                      "path":  "automation/fs_diff.py"
+                  },
+                  {
+                      "sha256":  "62340c60f04085e90dca347ed4baf0b7cff931b7bea13af8b7d8a3a0a6c47e1e",
+                      "path":  "automation/gguf_inventory.ps1"
+                  },
+                  {
+                      "sha256":  "38ea8332a1d89a0072db704128b5a372c979f7838953a93c55026dad0460190b",
+                      "path":  "automation/gguf_probe.py"
+                  },
+                  {
+                      "sha256":  "a42d02f7826d2223c786c0a03d1bd27ab8624fea97bd527ec5c2f16fb8faada3",
+                      "path":  "automation/gguf_probe.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "caf3fa0d06fa114189beef325925bc2fb6faa2650acb562a8cf05323f8cb1f3c",
+                      "path":  "automation/gguf_trace.py"
+                  },
+                  {
+                      "sha256":  "f66606c3b54f446a8573ada6200406792539223d9444d437c125e12d6129cefc",
+                      "path":  "automation/guard_to_hud.py"
+                  },
+                  {
+                      "sha256":  "25b71b1d646b5c683d5430a1cb12be6ab5e0263c43865e41d9a47373a1fa26ff",
+                      "path":  "automation/guard_to_hud.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "31647551ba96919af7186387edfa089ac511f115fa133342c9010995032e4cfe",
+                      "path":  "automation/harden_gateway_bind.py"
+                  },
+                  {
+                      "sha256":  "37c0d14cdf57a8a046c56ef94126d386fe3bc1907350c91436914ad16b69bb50",
+                      "path":  "automation/harden_mem_governor.py"
+                  },
+                  {
+                      "sha256":  "e87471126c3533322e811468dcee3c101840c1f0ffaf782b055d334258b2dfc9",
+                      "path":  "automation/harden_overlay_feeds.py"
+                  },
+                  {
+                      "sha256":  "18dffc7c955aa8b05e04908945cc46e0e7b263a706dfe4ed7693f53741f07785",
+                      "path":  "automation/harden_rotate_logs.py"
+                  },
+                  {
+                      "sha256":  "ca6868340e3b799a5e47795f643e95548d2e8d6049520aceab379e704a03c145",
+                      "path":  "automation/harvest_555.py"
+                  },
+                  {
+                      "sha256":  "c195732b4e4467b53f1bfd85a7602203626ba0e5740ae208d9fbc91996b3be86",
+                      "path":  "automation/harvest_555.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "f182f7680bfc42be67ee34257507c3b401d1ba7ae6da071465e1905adecf9d51",
+                      "path":  "automation/hashchain.py"
+                  },
+                  {
+                      "sha256":  "27c9e329908676ba1d5dd6117e2cdd34b73e4f2a609800945272b31b62cb6ae1",
+                      "path":  "automation/identify_payload.py"
+                  },
+                  {
+                      "sha256":  "75f0898ccd624ea67aef6dfcbe586470321055bf771c1d71bf57daa7a75fa818",
+                      "path":  "automation/ingest_docs.py"
+                  },
+                  {
+                      "sha256":  "c5276d358f228f9d3bec8674823d3b98cbdff86dd2581cf8b52ed47988c0a0f8",
+                      "path":  "automation/install_desktop_launcher.py"
+                  },
+                  {
+                      "sha256":  "35e2c3b7a0e5eb3beb22f46e5cff61064ff5858018f9192f658db7ca9b742f0b",
+                      "path":  "automation/install_desktop_launcher.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "dbec567a370e80b573e67c0728bd50e27c2349530f7913003133dde3b916f7c5",
+                      "path":  "automation/install_missing_deps.py"
+                  },
+                  {
+                      "sha256":  "b90e6ea9aa696d99e1e13e3a0720dd793cef1d54cc030a487de1a55784a63f73",
+                      "path":  "automation/install_unity.ps1"
+                  },
+                  {
+                      "sha256":  "c92b54ff2a414cb69523a664b2ba945c753b9913f3bbb5ce60afcdfaa27e64c8",
+                      "path":  "automation/inventory_automation.py"
+                  },
+                  {
+                      "sha256":  "a1ab32d3f05b3eb804760d027c6e43e1bf1947ad2db45cf2399a277ec03f9e39",
+                      "path":  "automation/inventory_mcp_surface.py"
+                  },
+                  {
+                      "sha256":  "8e296320082763b535feec00e0f9beb8d1b7665acedd9ddefd44a07646512957",
+                      "path":  "automation/isolate_test_failure.py"
+                  },
+                  {
+                      "sha256":  "bfb7e3ebafefd075b0927e133dee09b51ba79345664278554b803e1cfe5c7080",
+                      "path":  "automation/keep_model_loaded.py"
+                  },
+                  {
+                      "sha256":  "357c4aeda69045393067d3cad4bdfb298f5631524d7896a7b87cd90d96727657",
+                      "path":  "automation/keep_model_loaded.py.bak-gemma-20261101-213539"
+                  },
+                  {
+                      "sha256":  "bf59cd4841d5a1755f7f54487d0b09cd1d66c0f8d5a1c1101ac093169d72bb7c",
+                      "path":  "automation/kernel_compare.py"
+                  },
+                  {
+                      "sha256":  "4f3432b978ed0ae6d81034b7e38595e9e985b4c7eec0a031aebc0b31195bec0c",
+                      "path":  "automation/kernel_compare.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "4f46741fdf13df29f20bc7fdcd20e037684ce5aab4d3aa84a4072564472ffed8",
+                      "path":  "automation/locate_suite_failure.py"
+                  },
+                  {
+                      "sha256":  "0eedc954129c1c84acb97672fbcde37ad2ecf8c6d2da1f26ea92fd37e8da6051",
+                      "path":  "automation/macho_analyse.py"
+                  },
+                  {
+                      "sha256":  "ad45895f70f84bfdbd657afc7f692c50aa91caeddee0182cfbf02bade1f6d429",
+                      "path":  "automation/macho_analyse.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "32d2aae600ebaf7c801d3eb0d151ff43da84eba0b89d6f3efe31ffdaf63f4075",
+                      "path":  "automation/macho_anomaly.py"
+                  },
+                  {
+                      "sha256":  "8170312b2130d48822d18a97f318bf2d1432e588023a99d39e38837e1a0aa1a4",
+                      "path":  "automation/macho_anomaly.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "4227b6a0779c6648f0777e27953d38e19ceef918061eff0007d46c2eef63cbe5",
+                      "path":  "automation/make_verifier_importable.py"
+                  },
+                  {
+                      "sha256":  "e91c5dbb144c89a8a3793b7765a4a06dae2f5c0706803de1271873663709cc3e",
+                      "path":  "automation/map_dependencies.py"
+                  },
+                  {
+                      "sha256":  "76f8435a6829bd9962cb66e63ca31c9837f66971fd319ed4ba9ec7ae0154e33b",
+                      "path":  "automation/map_lmstudio_instances.py"
+                  },
+                  {
+                      "sha256":  "e63251ca98934e5ce2b83987dc51118268683d2aaf6c4f762f3cb3d069b6dbf7",
+                      "path":  "automation/map_lmstudio_instances.py.bak-gemma-20261101-213539"
+                  },
+                  {
+                      "sha256":  "42cad3aab1684436a987f2badc94903f997863d96908fddf6b3261559e0c3572",
+                      "path":  "automation/mark_dead_launchers.py"
+                  },
+                  {
+                      "sha256":  "ac4c5b3109fc00136b805db7a15d77a55af9c597ebffe4378de58e8afe757e03",
+                      "path":  "automation/maya_all_tests.py"
+                  },
+                  {
+                      "sha256":  "14b34d9c32c86dcefcc6958fab508f813a014845fbb9c5e318a71b59fb28bd5e",
+                      "path":  "automation/maya_entrypoint_diag.py"
+                  },
+                  {
+                      "sha256":  "fe2878787b02983cd96cf0055226e054b99cb93f42f12f2eeb0295ffde104ca4",
+                      "path":  "automation/maya_entrypoint_identity.py"
+                  },
+                  {
+                      "sha256":  "ac21a42975c2103001768fb6a0bb5cfdd67b0dcdb78c70a8078ed81615572459",
+                      "path":  "automation/maya_entrypoint_isolate.py"
+                  },
+                  {
+                      "sha256":  "18ce22e521d306c60de18a85eeec1d802d940f80db17b2d816259205ba04c1d7",
+                      "path":  "automation/maya_entrypoint_proof.py"
+                  },
+                  {
+                      "sha256":  "a38f2b77d243ec521b79d0ea0b7c3d4769cfc5645cc97417f1687b4b2df8417b",
+                      "path":  "automation/maya_entrypoint_repro.py"
+                  },
+                  {
+                      "sha256":  "87e5512f6c443e879c3754bb592f1e5eea03743183d4dff532c4d2fd493f79af",
+                      "path":  "automation/maya_fix_entrypoint.py"
+                  },
+                  {
+                      "sha256":  "f0a72f6a0b78b92541b2ce05183d32bc2d259ef09a935855191a41844a0aee21",
+                      "path":  "automation/maya_fix_entrypoint2.py"
+                  },
+                  {
+                      "sha256":  "47061826e1ad2dafc06b516b3c40512511681f0bea188d9f811b9d07d1da1a93",
+                      "path":  "automation/maya_gate.py"
+                  },
+                  {
+                      "sha256":  "808f0f60e1e1a24ffc776619a214abeb50c8e6a88239d39c47fdbe172becc3cb",
+                      "path":  "automation/maya_pytest.py"
+                  },
+                  {
+                      "sha256":  "a6ded9abf54a86dc0f09371c50e2a7ad5ba29931a95b8ace3e24906146731621",
+                      "path":  "automation/maya_triage.py"
+                  },
+                  {
+                      "sha256":  "ee4f2500db0818c70e7f072ef58ce0841a12bc7b3838ed8391aba6e7a0359ca1",
+                      "path":  "automation/mcp_runner.py"
+                  },
+                  {
+                      "sha256":  "788537e1072b14a45a94e48cd6a62b082975e016a51b47b3a34102ce1735205e",
+                      "path":  "automation/measure_bt.py"
+                  },
+                  {
+                      "sha256":  "3f3510bfd78ab0bf1155455749727592e81591e57b267a3a4a6ba2f912196599",
+                      "path":  "automation/mem_governor.py"
+                  },
+                  {
+                      "sha256":  "ac9151ae99509e1e5d07155e92dcb6fe7c67b7d5edd05794f73f368618f3349a",
+                      "path":  "automation/mem_monitor.py"
+                  },
+                  {
+                      "sha256":  "6dab7c12ea10414fcfd2021eecda962a34ff0adc0b9c3b332ef70a592f658fe8",
+                      "path":  "automation/mem_report.py"
+                  },
+                  {
+                      "sha256":  "e566313e32b5c556a5a04f14faa727033a9f8f7f2e3c6e57aa1e33fdcc1f108f",
+                      "path":  "automation/merge_brain3d_fixes.py"
+                  },
+                  {
+                      "sha256":  "61ef15f91a3a41c5c03698fbb05a65a09e147ca5329f8862128d7957155f5f01",
+                      "path":  "automation/mesh_runner.py"
+                  },
+                  {
+                      "sha256":  "53b33540fe60fdb41983aa6ffa17899ecc781c9b90c1ad7129cabcac50d50f97",
+                      "path":  "automation/mesh_runner.py.bak-pat"
+                  },
+                  {
+                      "sha256":  "1f0ba0003c8eb65e9252f18fbc28a4e0f442d46b5d0b4e98aaf4c147046e678b",
+                      "path":  "automation/meta_check_audit.py"
+                  },
+                  {
+                      "sha256":  "e0988b6ddb54c4b749acf41d8fdfe91dc3a5442a99ccafced57b608a077077f7",
+                      "path":  "automation/migrate_hardcoded_paths.py"
+                  },
+                  {
+                      "sha256":  "2dc4c07568caefcb759fee97b02c1fa1bc8cf9a34bf63005676c7c80ceba8c3b",
+                      "path":  "automation/move_models_to_j.ps1"
+                  },
+                  {
+                      "sha256":  "2557ec9ffe8542891f45ee77f52ee91f9322498672a4f70a20b0cbe62bb95f2a",
+                      "path":  "automation/move_models_to_j.ps1.bak-20261017-1632"
+                  },
+                  {
+                      "sha256":  "775d1b930165c5b20459d0714dd21d4d012cae6476845a098a761526bf6150db",
+                      "path":  "automation/move_models_to_j.ps1.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "70533f6a31357230a02ba44354aa95b97916934a9212a06bad4e08440b7e7ba2",
+                      "path":  "automation/move_unused_models.py"
+                  },
+                  {
+                      "sha256":  "bee01313a093aa022be1770ef26a40ba3c14942095690d64d63850776ce7a9cf",
+                      "path":  "automation/move_unused_models.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "12fbc7b41a537ec5217cac42c2261f55df13665b3c60b305bf663a1c59a3660a",
+                      "path":  "automation/nervous.py"
+                  },
+                  {
+                      "sha256":  "8d5e10347e280c8718578ab17905a951817d9c16f0eea091ffafbdf5b3fd3017",
+                      "path":  "automation/ocr_images.ps1"
+                  },
+                  {
+                      "sha256":  "2989e270a22f873836971b1c7b36cac02349ebd0ecec19a952da55c2cdd665dd",
+                      "path":  "automation/ocr_images.ps1.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "5a18c33c73b8b4e99ba40aeb49d462b2e2116033c4cfc46893e313eeb2f2ce8e",
+                      "path":  "automation/ops_monitor.py"
+                  },
+                  {
+                      "sha256":  "db14ec0c11081282b6bb2635ef6dd3cf07815f1b9bc6c6b7a999592a0795a98c",
+                      "path":  "automation/ops_monitor.py.bak-start-verify"
+                  },
+                  {
+                      "sha256":  "379837d5b88b6c6884b00f4a70342a012787106ca64492a0f289d08d9f285fe5",
+                      "path":  "automation/overlay_ctl.py"
+                  },
+                  {
+                      "sha256":  "d4e780cbd78863c56d8261dbee1ca33fbe54aed93ab51d94f090e02068829a16",
+                      "path":  "automation/overlay_detached.py"
+                  },
+                  {
+                      "sha256":  "65f31c86e71545478cf44cf8d0b6434fa911664247c072417da73559ea9df711",
+                      "path":  "automation/overlay_exit_diag.py"
+                  },
+                  {
+                      "sha256":  "2838c260a05ad079e675f1fa538b35d0f06da4462ac8eb09ac1a375c4ae47cd5",
+                      "path":  "automation/overlay_float_hud.py"
+                  },
+                  {
+                      "sha256":  "abb5d86a486308cf49a1466448ada09c9b6ebdc76674f77d9c0dc0d565751047",
+                      "path":  "automation/overlay_foreground.py"
+                  },
+                  {
+                      "sha256":  "03e4ea7a8634a8e938bb761facf21ac73dbbe56fba8dea27f5f4d5448a1791d4",
+                      "path":  "automation/overlay_health.py"
+                  },
+                  {
+                      "sha256":  "84994fc283d6c43c76327eca813acabdb804c66287d79b841b227bc7a9f52b44",
+                      "path":  "automation/overlay_lock_ctx.py"
+                  },
+                  {
+                      "sha256":  "bd686f218d22b2c9a43348379df853f8ad834a4193adfb1840dfbca8720a3e42",
+                      "path":  "automation/overlay_soak.py"
+                  },
+                  {
+                      "sha256":  "7fc5df2ab869946442ed7c0672cb942bd60583274527952fd24011a7ba3fe39a",
+                      "path":  "automation/overlay_watch.py"
+                  },
+                  {
+                      "sha256":  "e7e88bd4861bd4222e6c2e0cccaeedac59858d7861a20f8c1c75cef7ad9688ba",
+                      "path":  "automation/overlay_windows.py"
+                  },
+                  {
+                      "sha256":  "67ab395c2a6cd16952a5d008d0379c29292107c33fb81a35d5044c8c30647c18",
+                      "path":  "automation/patch_brain_redaction.py"
+                  },
+                  {
+                      "sha256":  "bd89516836a0484b592d0386aeaf13fd954616558d3f7d6e5cffc54d4ca7b153",
+                      "path":  "automation/patch_supervisor_writer_mutex.py"
+                  },
+                  {
+                      "sha256":  "f3c003fe088a6b51a969f083427d6acdd44f23c1326c2acbe5f9a840412abee5",
+                      "path":  "automation/pc_crash_guard.py"
+                  },
+                  {
+                      "sha256":  "c33f4e44ab0a83f074bbd0ce78469d8ceaded94566c5acf49029c4c02eef7450",
+                      "path":  "automation/pc_crash_hardening_20261102.ps1"
+                  },
+                  {
+                      "sha256":  "25746061c64614bb2d7fd8f30690335c03cd975d5d6eff7fe3f2f6aefd8b0c96",
+                      "path":  "automation/pc_crash_hardening_revert_20261102.ps1"
+                  },
+                  {
+                      "sha256":  "449278780d7be37222f14de44aa03d208fe3518f6e2988fdcb61bdc6f1a940b3",
+                      "path":  "automation/pc_freeze_recorder.py"
+                  },
+                  {
+                      "sha256":  "bdda788358f3b0c2e6fc8537a77fc4bf2dda157d599a87e705de028bc205bea4",
+                      "path":  "automation/pc_freeze_selftest.py"
+                  },
+                  {
+                      "sha256":  "ec46c9fa841937aa32b06e838c5236cd790e9cb46a00827690d3c8b9c318abae",
+                      "path":  "automation/pqc_tpm_wire.py"
+                  },
+                  {
+                      "sha256":  "0e9e24fb2f1783a3df64334a01b8131634a1631581a83a5a699bc9428e95b313",
+                      "path":  "automation/pqc_tpm_wire.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "c80ab24c4555726709342ad24d9f06d359b2212cb0deaa6613decbf4226cfb07",
+                      "path":  "automation/probe_datastore_behaviour.py"
+                  },
+                  {
+                      "sha256":  "b99a67d92b4112fc674de65183d83e45fbbb9c456eeec06f3d86fc705a6a23c7",
+                      "path":  "automation/probe_dll_literal.py"
+                  },
+                  {
+                      "sha256":  "f5677115fee8a44d6b499a400481aa958324584365cfcb7add5a4592e6f536cf",
+                      "path":  "automation/probe_dll_literal.py.bak-20261017-2312"
+                  },
+                  {
+                      "sha256":  "c650a4e2cd1adac76debea542784e669c83d2f6be6ab51ac427465b4f2911b77",
+                      "path":  "automation/probe_llm.py"
+                  },
+                  {
+                      "sha256":  "3dec21fb0a4935c1f740c81d832d1f812defbeaf11de687c179ba8f03f786aa3",
+                      "path":  "automation/probe_memory_holders.py"
+                  },
+                  {
+                      "sha256":  "d25e9b8ea48b7b6c31e15502c2e354fc26c0e6d69c3f3cca464a6d43f1af0fca",
+                      "path":  "automation/probe_models.py"
+                  },
+                  {
+                      "sha256":  "49a9ac7c921e9653b2f01179488d9fadc72d59ae5286b024a04f9f0dbcfdf8d9",
+                      "path":  "automation/probe_models_serial.py"
+                  },
+                  {
+                      "sha256":  "18f7da6d2a84c3b51e8bdca02abf8ee32394c9787747520f10647e1af93f1c38",
+                      "path":  "automation/probe_opencl_devices.py"
+                  },
+                  {
+                      "sha256":  "d1bc97e406597a083dc8ac047f43d8ec22e7ca58b8a0120250e603815d640057",
+                      "path":  "automation/probe_overlay_state.py"
+                  },
+                  {
+                      "sha256":  "15ae5d806bdd54db14a89ddda63e9f8645cf45a1fd7d79292e4f0513d973378d",
+                      "path":  "automation/probe_service_shape.py"
+                  },
+                  {
+                      "sha256":  "d9dcd5613e74f4b9812adf869501df930305c9fc508144b37a3584672e7513b8",
+                      "path":  "automation/probe_timeout_forms.py"
+                  },
+                  {
+                      "sha256":  "d499de342bfbaca41f1b7b8c7217f4f227fa7a7ce4bac519a0ba0bf6a63ee56d",
+                      "path":  "automation/probe_tpm_cng.py"
+                  },
+                  {
+                      "sha256":  "0148f9dd6768004aeafdc9a05b7186c75ab72b94bff333ec532459e5dbbf8cc2",
+                      "path":  "automation/probe_tpm_encrypt.py"
+                  },
+                  {
+                      "sha256":  "be139fb3dd0493d15626bce66efdc76cb5f3ef49b4027028480edb4674215d17",
+                      "path":  "automation/probe_unity_admin.py"
+                  },
+                  {
+                      "sha256":  "f8c047749bde12868b467227cba7277653fb74fdb7a7eba961b04ee1048cb397",
+                      "path":  "automation/probe_unity_installer.py"
+                  },
+                  {
+                      "sha256":  "b1c71aff9b5c35b9cb1e3be07404999a5c743212f6dbf0abd93c7b78a7db4af8",
+                      "path":  "automation/prove_fusion_repro.py"
+                  },
+                  {
+                      "sha256":  "0390326349a2ae7023f55cdf0e52c6d2646b51cb7eb7c239f5fa210d98b8050c",
+                      "path":  "automation/prove_gateway_route_regression.py"
+                  },
+                  {
+                      "sha256":  "3bbf8aff9b8913c752693561ccc28d9e80819303b3bd1fa4f9313f1b7ba06b10",
+                      "path":  "automation/prove_health_regression.py"
+                  },
+                  {
+                      "sha256":  "d352b651f92e56cebe73b8960a6173b5cda5ca6e09443ab15bc80703450dd110",
+                      "path":  "automation/prove_router_substitution_regression.py"
+                  },
+                  {
+                      "sha256":  "18987a6fea838f6180d94b66dd47caee3171bdd972eab865ac2842c20abb9a6a",
+                      "path":  "automation/provenance_probe.py"
+                  },
+                  {
+                      "sha256":  "1a34426bd8e354e6e55b4414467858b9977723ae7d82bfbbad827c654ac82917",
+                      "path":  "automation/provenance_probe.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "d5e153c1c9b149ef8ec7c82450efd3bde4efc1f29eb6f0433c712f149a8749c4",
+                      "path":  "automation/push_repo.ps1"
+                  },
+                  {
+                      "sha256":  "2f6611f515c064fdc04bebddbacc835566960ca941cd1b3ed6f39ad4affe7c7d",
+                      "path":  "automation/py_stdout_probe.py"
+                  },
+                  {
+                      "sha256":  "f689eafa4a443579ed7ce97e22d87bf7b8cc9ed63d840948b247a0faaef6f51d",
+                      "path":  "automation/rank_ui_skills.py"
+                  },
+                  {
+                      "sha256":  "f242f76824f0bb6900b4f278fb5204d9931c368d3adac54d7e56112e6c5b2138",
+                      "path":  "automation/raw_string_probe.py"
+                  },
+                  {
+                      "sha256":  "b6bc17d76485973cc17181006017acacbfb88e04048ba9a4b7ef92b238ae9b6b",
+                      "path":  "automation/raw_string_probe.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "423d3fdd2cc9126e370a7b1a57a242c6a1c3690358e3e3e8029f5f90979e9d11",
+                      "path":  "automation/read_lmstudio_log.py"
+                  },
+                  {
+                      "sha256":  "5f0875cce50f5e271b9cd19032f2c94d849b10694388de4c1087d0036747f1b7",
+                      "path":  "automation/read_lmstudio_log.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "392fd98928d69a119dece34d6a1f3c08df391be031dda298619d439ad03b2564",
+                      "path":  "automation/reclaim_bt.py"
+                  },
+                  {
+                      "sha256":  "5c3e341f23c4283f9453c9cc5ac4616a1f37ba0d6d6ed48a9d270f1396f07c8f",
+                      "path":  "automation/reclaim_bt2.py"
+                  },
+                  {
+                      "sha256":  "c79a14e4f5d363ff78a3be5fe469c57c04df0a8771e4478b595a03d2c092741b",
+                      "path":  "automation/reconcile_ports.py"
+                  },
+                  {
+                      "sha256":  "79c08cd954ae37d3b04e6d70206b5999a4927bee4bf5c507486f3023fbaa31aa",
+                      "path":  "automation/redact_config_secrets.py"
+                  },
+                  {
+                      "sha256":  "f3a0b1b3dd1bcacb1fd51b06ebe78b6aedb443e9ea9d4a5b130fb48887ab398d",
+                      "path":  "automation/refresh_final_run_state.py"
+                  },
+                  {
+                      "sha256":  "515a2b075d35bfcd27ec91d24436b9290b43429b6bdc75a6ae753026a1633609",
+                      "path":  "automation/register_llamacpp_service.py"
+                  },
+                  {
+                      "sha256":  "2772cb474c004787b7c8acbd945786cbca104936e3e85138716ac61244465a83",
+                      "path":  "automation/register_llamacpp_service.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "48ce87bd058e89dbf8ac0f4c1e155249a5cad184a9eab87d8d55ab8fe0dc18d3",
+                      "path":  "automation/register_local_backends.py"
+                  },
+                  {
+                      "sha256":  "6765edf213ef6820476fa7d8ad45c3080233cd9dadea3c8675a6c0f70c9a3e5b",
+                      "path":  "automation/register_local_backends.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "c9546a2aa87044559f5c25cb5c98802abc0345f2c11199a904d5061ab72148dd",
+                      "path":  "automation/register_mcp_tools.py"
+                  },
+                  {
+                      "sha256":  "0a0f06840519702b83cf00acb71ff4414b751e712a1264f3f2eb4f1fe86118b5",
+                      "path":  "automation/register_neo_provider.py"
+                  },
+                  {
+                      "sha256":  "66bafbfd08f26d71a9790d15344921e38c269d2f8c3009746bf6fe942e64d900",
+                      "path":  "automation/register_renderer_autostart.py"
+                  },
+                  {
+                      "sha256":  "76db3f81b9ee2f26f984d3d305dedbfd195e5b64c7cdde51b985ad4ba5ce0907",
+                      "path":  "automation/remeasure_vertices.py"
+                  },
+                  {
+                      "sha256":  "8631f7255789b008275c178b14cbd3bc1c104083b185a2d5b8bc41e78a2efd7e",
+                      "path":  "automation/repair_unity_builtin_sha1.py"
+                  },
+                  {
+                      "sha256":  "fd2851d4c3610a64fced5b3f0e0df7e9db3ecb608b5979c8f5e7357e9361b218",
+                      "path":  "automation/resolve_build_tools.py"
+                  },
+                  {
+                      "sha256":  "be17d4173a48b26b71f896e03516fad9b463fedbf9e154ba136b48612a89589a",
+                      "path":  "automation/restore_chat_model.py"
+                  },
+                  {
+                      "sha256":  "d0d1549fb8f66ed876bd8b35a31af9fee55211a483748ce5a076031f58334dc2",
+                      "path":  "automation/restore_chat_model.py.bak-gemma-20261101-213539"
+                  },
+                  {
+                      "sha256":  "9a1bbe382b21ed658f1438da05cf6ce787764f79a09493af08c6b50018ee3bed",
+                      "path":  "automation/retire_j_library.py"
+                  },
+                  {
+                      "sha256":  "2c89ec27f028116082570636f426831b1e6f732e0bfb3ab631787d464f587fe2",
+                      "path":  "automation/rewrite_soul_audit.py"
+                  },
+                  {
+                      "sha256":  "289dec0a4e9e462d49aaee772fd2d0395a5bdcd7586849d55e3f76d89d68b9da",
+                      "path":  "automation/rewrite_strip_script.py"
+                  },
+                  {
+                      "sha256":  "99737d5fbe64b3e4dbcfc38a9effe426697d6127571a1e2d979bf674e9b73665",
+                      "path":  "automation/rotate_logs.py"
+                  },
+                  {
+                      "sha256":  "11b815200027e0b86b9620db1c871ed1bab1829000d85cf8dfe8bc212740810f",
+                      "path":  "automation/run_mesh.ps1"
+                  },
+                  {
+                      "sha256":  "6e6e1711f1d98bcd20ea239883f2d22ea220c4eadbb70a17613187904f46cac7",
+                      "path":  "automation/s25_motion.py"
+                  },
+                  {
+                      "sha256":  "f31a0c530eb6d19b44e2db259e05566aa1653ca26eff65b4d20ddd10a0a66f0e",
+                      "path":  "automation/s25_senses.py"
+                  },
+                  {
+                      "sha256":  "e13871ba4db6f8e6791f167493589c03e8ae02c1f5f8086dbc81de61e051aaa1",
+                      "path":  "automation/s25_senses.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "6be3091a156cf060297d5e2b6fb38477ceadf3e829cb03b197d3593c1da4496a",
+                      "path":  "automation/scan_drives.ps1"
+                  },
+                  {
+                      "sha256":  "6c2861dc28e1e1358104ed322e96eabba98c35965718f2b9db551f7383226325",
+                      "path":  "automation/scan_gguf.ps1"
+                  },
+                  {
+                      "sha256":  "fe95e049a0cb5f22f70c597cdac976e336d980255365484a4e660a286d99135f",
+                      "path":  "automation/seal_env_to_tpm.py"
+                  },
+                  {
+                      "sha256":  "75f9f3f60e5b1dc2d4e88b3025a428fd99d69837ec8a9a315000e13c5744f099",
+                      "path":  "automation/seal_env_to_tpm_v2.py"
+                  },
+                  {
+                      "sha256":  "b2d658c97c2e8def1357e577bdc3d34ef4beb67f4e0c2665586c99dc62be210a",
+                      "path":  "automation/seal_env_to_tpm_v3.py"
+                  },
+                  {
+                      "sha256":  "c49d7907bb0319177cfc1697a926100fd6f9a99b00453e7816dfbcf1f47236f0",
+                      "path":  "automation/secret_rules.py"
+                  },
+                  {
+                      "sha256":  "7da775a4ee02358e1f2ba9396f07aa695c39ebad70b0ec41c0edbedf5471411b",
+                      "path":  "automation/segment_locate.py"
+                  },
+                  {
+                      "sha256":  "5eb1332848b924897a2b03eb2a5267cdab9495b5c5c848092e4c5386032e094e",
+                      "path":  "automation/segment_locate.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "12acf976b6bdda993d1f9fdcf7ee45a9843eaf7a2fce9e1f6ca8ed37104ed0fb",
+                      "path":  "automation/serve_unity.bat"
+                  },
+                  {
+                      "sha256":  "55ea55822cbffdfd4b8bb7f4718e9fa38396556c342d1c6fc3a51fa5c9d5b48b",
+                      "path":  "automation/serve_unity.bat.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "4766ca260e673928f147edaa539d261cedfb0dd246e832b88d351fffbaa48f4d",
+                      "path":  "automation/service_audit.py"
+                  },
+                  {
+                      "sha256":  "6df79f240d962851ab6518f81cfcb8eb489b3be1426dabc4c5899a682b87a0f8",
+                      "path":  "automation/service_consolidate.py"
+                  },
+                  {
+                      "sha256":  "c6b6c0ed7b64a5d3964f038f9c901d3ccc5a83f3e0bdd51b83ced7b3e1e20126",
+                      "path":  "automation/service_supervise_port.py"
+                  },
+                  {
+                      "sha256":  "e6ce3d40560864548ff34502230af69f99112041df2ea52dcee6ecd4d271901c",
+                      "path":  "automation/set_pagefile_24gb.ps1"
+                  },
+                  {
+                      "sha256":  "79cb9d57060804ab72babc516703535020dfa9f714cb1219a80855967dda8a4a",
+                      "path":  "automation/side_channel_coherence.py"
+                  },
+                  {
+                      "sha256":  "2a081e27395d8073615f3c5a0e0e864cc66323c2c8b9b9db04e3edac429a6532",
+                      "path":  "automation/snapshot.py"
+                  },
+                  {
+                      "sha256":  "3619260380cf0c8e52062f3053671bc3804abbd22d51821a56fd931001b004ae",
+                      "path":  "automation/split_agi_config.py"
+                  },
+                  {
+                      "sha256":  "2752c7698e150ebcdae9acf434bc724505b8ded6923565516d96a41ca7690a94",
+                      "path":  "automation/string_brain.py"
+                  },
+                  {
+                      "sha256":  "c988f8be54dfe0922c91cf25d8d59b1298f36efeaee212312ba97d4eec5a0c46",
+                      "path":  "automation/strip_leaked_key.py"
+                  },
+                  {
+                      "sha256":  "ebff700cfd4718f93417e2d874ee85e5c80cbbdf69d92b4e2498396e78d40c77",
+                      "path":  "automation/superblob_parse.py"
+                  },
+                  {
+                      "sha256":  "8e937d5cb3d51c3422159b8061d17f6a5ad74c79caac9d454d43f9f2eebd9044",
+                      "path":  "automation/superblob_parse.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "2c733e529e9789426d6a9e5c18b68900657bc21572ea1e8d2a93cd2ba551cd36",
+                      "path":  "automation/supervisor.py"
+                  },
+                  {
+                      "sha256":  "1904a7bf345bcefb75d6a0598d1b64ad1176975c8d34ad6958adda03bdbf7dc4",
+                      "path":  "automation/supervisor.py.bak-20261018"
+                  },
+                  {
+                      "sha256":  "ff372c7dd857e5fe7d06c7c8b5f9e5d90ca2ecc82311d5b69ec493e96a32ba9c",
+                      "path":  "automation/supervisor.py.bak-20261018-0125"
+                  },
+                  {
+                      "sha256":  "b1aa6be006b2f6aa750ad5d6432b0300f045f7441757d99ad88015232499d5e7",
+                      "path":  "automation/supervisor.py.bak-agentcore"
+                  },
+                  {
+                      "sha256":  "b2b90f25a9e90d836793e42d1467453f5f73066321956dbc3c78863591dadb43",
+                      "path":  "automation/supervisor.py.bak-autostart-20261031-214359"
+                  },
+                  {
+                      "sha256":  "567e130e5d7ce2487bd9fec029bfe2d64d57ea8b1e706a2b55ed15b933c60fa5",
+                      "path":  "automation/supervisor.py.bak-dualwriter"
+                  },
+                  {
+                      "sha256":  "851f2e0dcc4c7723e175f59b4c775dd2648a859661621fb52cc95125e4bf60fc",
+                      "path":  "automation/supervisor.py.bak-edge"
+                  },
+                  {
+                      "sha256":  "355e3d2856ca2af9a20e867bf0995a8a10cbe35b848e5bf2fa71740f97acc637",
+                      "path":  "automation/supervisor.py.bak-exeprobe"
+                  },
+                  {
+                      "sha256":  "a4b6fdb68c5651339f2f54f4a4dfd4d3701b7f0ac00d91c6e1c6bcd4332b90e1",
+                      "path":  "automation/supervisor.py.bak-exeprobe2"
+                  },
+                  {
+                      "sha256":  "96bcada8d236cd7fbda2a5957f8e28e5610639c73e409adc01f6616f2c2d2c18",
+                      "path":  "automation/supervisor.py.bak-exeprobe3"
+                  },
+                  {
+                      "sha256":  "a3679332a5b8ac658c3af5f4648db231d490acb1786d77ae8f38b61d6ae258db",
+                      "path":  "automation/supervisor.py.bak-heartbeatorder-20261101"
+                  },
+                  {
+                      "sha256":  "2ee3cbba21dc3f58c23c76942c2ce9fcf95dd95e265b1482ece6174e7b8c7e46",
+                      "path":  "automation/supervisor.py.bak-jevbridge"
+                  },
+                  {
+                      "sha256":  "b39e9f6c9cb1fbc38505d6b68987ee4ab4224dca6e5dd8d5031a3227e3bee7dd",
+                      "path":  "automation/supervisor.py.bak-llamacpp"
+                  },
+                  {
+                      "sha256":  "e3da83e682f2426d138169c79073f52d44b60fbb1328c73d5ba80c8a60ef41af",
+                      "path":  "automation/supervisor.py.bak-llamamodel"
+                  },
+                  {
+                      "sha256":  "009c80bc1d52c85e86a8600b166317817f6196cca72be2ca4e078d718236d971",
+                      "path":  "automation/supervisor.py.bak-local-backends"
+                  },
+                  {
+                      "sha256":  "aa89b47ab42f3409581285333717178542043f41194c44452e9686935fae6e04",
+                      "path":  "automation/supervisor.py.bak-once-20261101"
+                  },
+                  {
+                      "sha256":  "b18be48898676578097e29c03dd1eb7d099562305ebae1d845a65eece6c1cac4",
+                      "path":  "automation/supervisor.py.bak-osiris-20261031-170059"
+                  },
+                  {
+                      "sha256":  "f03595f8fa01df0e210d43ec30bda6a83634c127d4aae316b21fea2d5745e9fd",
+                      "path":  "automation/supervisor.py.bak-pidrace-20261101"
+                  },
+                  {
+                      "sha256":  "f16617e5bd981355add317b38a52e0fb12f1952d80dd90e5337e5be284c60a40",
+                      "path":  "automation/supervisor.py.bak-pidreuse-20261101"
+                  },
+                  {
+                      "sha256":  "064fb97c2d1eb56ca015162f510e72811d14d83a4286dba9e9b7b658939aa617",
+                      "path":  "automation/supervisor.py.bak-portlock"
+                  },
+                  {
+                      "sha256":  "65b48ea834be368b79d18b1c7dbbd04b59ef41c91f7da1cf2f33370156374fb6",
+                      "path":  "automation/supervisor.py.bak-preflight"
+                  },
+                  {
+                      "sha256":  "4558b4964c19f35f25665b18d34d88fe47128928d0fb79c9e0cb09919ef6100e",
+                      "path":  "automation/supervisor.py.bak-tickpid-20261101"
+                  },
+                  {
+                      "sha256":  "36c90988e36d7a52eb5cf99e7e033606ae91b21400d1630209c5eefd4ea4b717",
+                      "path":  "automation/supervisor.py.bak-triunemind"
+                  },
+                  {
+                      "sha256":  "7e783f81ea3e8cd13a8a87ccc161f643604f9fd86e15f9217bcbff710c2675f2",
+                      "path":  "automation/supervisor_overlay.py"
+                  },
+                  {
+                      "sha256":  "98a0dfbad39127c15b5d60e182634746b54759cd648d7414570b0da5036917ea",
+                      "path":  "automation/test_fallback_content.py"
+                  },
+                  {
+                      "sha256":  "8261fd64cf3e53c67d01aa5bdff6f974ad44154bfc22dbeb0a7d296b9e4b763a",
+                      "path":  "automation/test_fallback_fulleror.py"
+                  },
+                  {
+                      "sha256":  "551ed7e57631d59b03cc90a75187081a5f33c6e466f145598ab8cd35a980c2cb",
+                      "path":  "automation/test_fallback_swap.py"
+                  },
+                  {
+                      "sha256":  "cd8a91b8b4d3db672fe446d1104aa0f650017cf21e5dc3b00c24396144a9e4f4",
+                      "path":  "automation/test_fallback_valid.py"
+                  },
+                  {
+                      "sha256":  "12b6c5716cbe8cd9bcfc030830cbc4a71c9f5c9938b14a5672a093c5969e2ac0",
+                      "path":  "automation/test_overlay_drag.py"
+                  },
+                  {
+                      "sha256":  "8fba47b8c123232ae424727b610f306c208f29eb415bb9aee9bba7107f6a54a3",
+                      "path":  "automation/test_overlay_float.py"
+                  },
+                  {
+                      "sha256":  "79e351edec0373a8dec2cfd352e86203c22aa25b8a05ef1ad5bc561692499d39",
+                      "path":  "automation/test_pollution_pair.py"
+                  },
+                  {
+                      "sha256":  "cece462508c845bc7a9c98a88c5bd76e30fb31aa0148c8277a872bcce8f860fc",
+                      "path":  "automation/test_provider_chain.py"
+                  },
+                  {
+                      "sha256":  "527d2bb68b004e46e9f9b2f1483083a9bfb7af961c96cd0ae72963924426c0b6",
+                      "path":  "automation/test_role_resolution.py"
+                  },
+                  {
+                      "sha256":  "2985cffe8e087496484d5370c02b9d56d8de396a433172aeba06524f50d8abfe",
+                      "path":  "automation/tg_bridge.py"
+                  },
+                  {
+                      "sha256":  "3ea1262e55bad27ad329cb7e1042b342fcf4bdf2922f36a3f960cd077a1d8cdd",
+                      "path":  "automation/ton_anchor.py"
+                  },
+                  {
+                      "sha256":  "1942e1d548ba949d1246dfc1786b3bf96b4f337637987a177cd4cc20bfc3fb6c",
+                      "path":  "automation/ton_anchor_check.py"
+                  },
+                  {
+                      "sha256":  "864972fca49ce0e655b4c54bcbdf622ba3a88be79a6ad2dfd6c9187793ab8a22",
+                      "path":  "automation/ton_block_endpoint_probe.py"
+                  },
+                  {
+                      "sha256":  "2da7c519c5d09b597fc5ff7e2a78b46fe33fa18d3a6f50f99033638f8285f8e8",
+                      "path":  "automation/ton_fee_measure.py"
+                  },
+                  {
+                      "sha256":  "7f4faee1cbdc734321bcf332a63c7d3070b4785f4b572e3bb04b89302f58d953",
+                      "path":  "automation/ton_fee_probe.py"
+                  },
+                  {
+                      "sha256":  "e37754f8d47bdf8eb8501122c613777760747d97aef5ec300dd7918ab9481edc",
+                      "path":  "automation/ton_offload.py"
+                  },
+                  {
+                      "sha256":  "0006cf2c0c7009dbdeef8276782ccf9d6707599afc5f9b748467e60b3aa3bcaf",
+                      "path":  "automation/ton_probe.py"
+                  },
+                  {
+                      "sha256":  "29a33b6ac47cf3f9e50c3933f161d1403c0aa2202405bf1c46275d9e670059bb",
+                      "path":  "automation/ton_tx_endpoint_probe.py"
+                  },
+                  {
+                      "sha256":  "7d3fcfdaa93ef66124ac90bdcff22e5ba69ba0d59b29a99144066cd55618a75c",
+                      "path":  "automation/tpm_seal.py"
+                  },
+                  {
+                      "sha256":  "e60fe09a97aea7896b06d7349b0d3a3dcdca4042c6f29fcb66e483e25dbeba96",
+                      "path":  "automation/trace_agent_call.py"
+                  },
+                  {
+                      "sha256":  "38ba3344e6f633fdf375b9ac07c30d665d8926be74d784e8efe6ea95ba36b4e0",
+                      "path":  "automation/trace_agent_call.py.bak-gemma-20261101-213539"
+                  },
+                  {
+                      "sha256":  "31a11334366b0a8989028fe91297955397b46eee4d9336cc75ed7e984be9695e",
+                      "path":  "automation/trace_interleave.py"
+                  },
+                  {
+                      "sha256":  "53547d656fcf2c8d96e6daa8fe90f3598db41c82645d3b58dea3944571f724d7",
+                      "path":  "automation/trace_interleave.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "b96e07e118868e2b1eeb4979c7e41ed451c30456e33d758a4e642c519044de80",
+                      "path":  "automation/triage_secrets.py"
+                  },
+                  {
+                      "sha256":  "acfcc79034573dc4e0769ec869752b7b520b71196ac04bdb833079c58a86c8c2",
+                      "path":  "automation/ui_brain_gate.py"
+                  },
+                  {
+                      "sha256":  "9752fdc6fc9a52b15b9d6634f8a07fc385a364d9bd907749ce679618bb5c1210",
+                      "path":  "automation/ui_hotwire.py"
+                  },
+                  {
+                      "sha256":  "179aab2fc7efa483993ec31d5bbe47d3486c2bbfa9ff637e8ac52bc4342c1cf1",
+                      "path":  "automation/ui_improve_loop.py"
+                  },
+                  {
+                      "sha256":  "dc6992ea5219733c570eac3b90ca34420074c9bc079c0da78ab0b7d72d63a46a",
+                      "path":  "automation/ui_snapshot.py"
+                  },
+                  {
+                      "sha256":  "964f1d69f033a426e452ace293a74a4e233ebc06bbb76c942eb33d7b7f5e5ee2",
+                      "path":  "automation/unity_module_census.py"
+                  },
+                  {
+                      "sha256":  "b9ca83ef4a30b40a2b13b9be8633b836182d746e0e7179b8ddce3844e4d25143",
+                      "path":  "automation/unity_proc.py"
+                  },
+                  {
+                      "sha256":  "f47fd1e19b51938b350a8e973af933ffaee20d47ba2de2698cd4e5596360f6ae",
+                      "path":  "automation/unity_status.py"
+                  },
+                  {
+                      "sha256":  "3686fd0a37a48a816bf4c4cfb50580d772cabd66c68808bcb1f54cfbf945c2f4",
+                      "path":  "automation/unity_status.py.bak-20261017-2312"
+                  },
+                  {
+                      "sha256":  "0d0d870afee904469f3f19c25e16aacf1634f68ab044b93c6d6fc174c221279c",
+                      "path":  "automation/unskip_master_autonomy_test.py"
+                  },
+                  {
+                      "sha256":  "7fee791aec117410b5bac751de73df4e15178254d4c66b1ba3cdc0bca737c0ef",
+                      "path":  "automation/update_arch_edge_ledger.py"
+                  },
+                  {
+                      "sha256":  "a588b1e11525ca64e9e2d7db623e3bf34d42c2f8029dd0c10a7d81cd5947d54d",
+                      "path":  "automation/update_brain3d_tests.py"
+                  },
+                  {
+                      "sha256":  "fd9458c8e322f1114f4a354040445b7cb9caacda2c33ff03c14dad219a74e6ee",
+                      "path":  "automation/verify_brain3d_live.py"
+                  },
+                  {
+                      "sha256":  "709902134d335c98dc2510e4c9318b51ecef958052421a61449ccbdc75455161",
+                      "path":  "automation/verify_cycles.py"
+                  },
+                  {
+                      "sha256":  "af33d359405176d0b83b0ceb0c32070c039fac43350892aa37d2e1991f7f7d50",
+                      "path":  "automation/verify_docs_live.py"
+                  },
+                  {
+                      "sha256":  "ccf0236bf734d2304883c44fdcd3c6ddb765c78b297e6468d67196d0e7a1daab",
+                      "path":  "automation/verify_locked_agreement.py"
+                  },
+                  {
+                      "sha256":  "52ad0c30ba164c12ca3459e84f6d6232e785898b670a4d211254be6464a4ac9b",
+                      "path":  "automation/verify_named_models.py"
+                  },
+                  {
+                      "sha256":  "950300c9448df6ac1caca8a59a6eee00b487d73822a33ba3df1073522858a8ec",
+                      "path":  "automation/verify_named_models.py.bak-gemma-20261101-213539"
+                  },
+                  {
+                      "sha256":  "72711ec2689e1a06bdd70d73f50226e33e13b6bcee1581a75185e2e564fb42e8",
+                      "path":  "automation/verify_opencl_devices.py"
+                  },
+                  {
+                      "sha256":  "b7435b27ad53213e7d5f88b0c1265d9503ead8eeeab65803669d8d0912323b99",
+                      "path":  "automation/verify_renderer_autostart.py"
+                  },
+                  {
+                      "sha256":  "072a444142bda09ea72c7d289804f027191342a6bda6ea87ea24c2016ad63803",
+                      "path":  "automation/verify_scene_structure.py"
+                  },
+                  {
+                      "sha256":  "d55d50521a9328a1abcf6e25007969856e4f06caa88b4acdfa844190bbbe3b73",
+                      "path":  "automation/verify_scene_structure.py.bak-20261017-2312"
+                  },
+                  {
+                      "sha256":  "d42b5b20e71d93e42f82ad5c020ea31d08582d263be1635b32faff1c0919fbf4",
+                      "path":  "automation/verify_services.py"
+                  },
+                  {
+                      "sha256":  "708915edfa2ebce916026f0d850ae116ec15d3a2e04545d156d6e06e89fbeda8",
+                      "path":  "automation/verify_signature_claim.py"
+                  },
+                  {
+                      "sha256":  "85da319aa6279f0c7c6a1251a231ef7af2a326b0acce08c9b5549d6b46596442",
+                      "path":  "automation/verify_signature_claim.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "ed22c7c5c5d3253c309f4fb2b24e386e8c5c96e77552fe2cf32ff39877e40762",
+                      "path":  "automation/verify_stack.py"
+                  },
+                  {
+                      "sha256":  "22f6afb3426df3826d7e073e987ac48c40d191151a7345cdf45f262d11bbfd5b",
+                      "path":  "automation/verify_steer_pipe.py"
+                  },
+                  {
+                      "sha256":  "300f0643210326ae5111615949f0392acc66d9ea091f6d51cb5e82a17ee9c6bf",
+                      "path":  "automation/verify_unity_assembly.py"
+                  },
+                  {
+                      "sha256":  "0f97d3effe89553313a3652e2c3f6cd3e0e6f5cff8f2ce41ccee17aeffd6131b",
+                      "path":  "automation/verify_unity_assembly.py.bak-20261017-2312"
+                  },
+                  {
+                      "sha256":  "2a4c91d87b4c3d0fc3e07bfbf4cf3567a2c5046f45545989b78bc3ea4ac9ec75",
+                      "path":  "automation/verify_unity_editor.py"
+                  },
+                  {
+                      "sha256":  "e7a48b3a356094dde1727a3e78f2dc9744befb88e345c347adb3380ad5710145",
+                      "path":  "automation/verify_unity_installer.py"
+                  },
+                  {
+                      "sha256":  "6dbde82a51cc2d5f821f6811686b4a94506771664e61b4ba8abe315c9442f4a8",
+                      "path":  "automation/verify_unity_runtime_contract.py"
+                  },
+                  {
+                      "sha256":  "edb483bbeb08b243354a4ec6a93b0ecc6ca7e87a58efb148411b0368a16133cf",
+                      "path":  "automation/verify_unity_runtime_contract.py.bak-20261017-2312"
+                  },
+                  {
+                      "sha256":  "87d01253627b35a863486951a08530072dd775f944a2be61351c5317a88be07d",
+                      "path":  "automation/verify_unity_scene_guids.py"
+                  },
+                  {
+                      "sha256":  "b3d410da1e2fd45210da078e71d39a8e7691566c2c8dc2e020e41ba1c35aa18a",
+                      "path":  "automation/verify_unity_scene_guids.py.bak-20261017-2312"
+                  },
+                  {
+                      "sha256":  "3a94cdd0137ca78cb7eb7a275c82ed379eba2799a4e7810bfd0c626d8a194043",
+                      "path":  "automation/verify_vision_panel.py"
+                  },
+                  {
+                      "sha256":  "18fff3e08c45305f384e827ffee89e089eec34f45334108e0e311d44e625aa5c",
+                      "path":  "automation/verify_world.py"
+                  },
+                  {
+                      "sha256":  "edee398ad3ec136c353f2019fdcc628295225face7d1c0dc04e86ee33f729e3d",
+                      "path":  "automation/vision_audit.py"
+                  },
+                  {
+                      "sha256":  "85bf7e245adedb7412bd803f6b59e51ef41ea939eda7cb035cbb9afdb040100a",
+                      "path":  "automation/vision_discriminate.py"
+                  },
+                  {
+                      "sha256":  "17a29a642abef6b460c58786157f3772897ec569c29b4d317f78d55f0f5b6632",
+                      "path":  "automation/vision_extract.py"
+                  },
+                  {
+                      "sha256":  "c994bea1863b62961b9ed11b1fae4716cce5876b8d5c65bd88d0b7e1e33d1f80",
+                      "path":  "automation/warm_gguf.ps1"
+                  },
+                  {
+                      "sha256":  "b2f9533bac2665fdd30c75e58ea53ae228e7816f0181f4ea3f371ae02d6343ab",
+                      "path":  "automation/warm_gguf.ps1.bak-gemma-20261101-213539"
+                  },
+                  {
+                      "sha256":  "df546899a70720a8b532b19928e3048bcec1badf039bd4b34a5413bbe3c08d0e",
+                      "path":  "automation/watch_installer.py"
+                  },
+                  {
+                      "sha256":  "39241fb9325284350fd7b559682db370cc2aa772717c86de449905eaf1e1aa80",
+                      "path":  "automation/watch_installer_io.py"
+                  },
+                  {
+                      "sha256":  "75997d30acbe983e00e84955338edf05271588c6368ada4b0fa5216fb00b8d42",
+                      "path":  "automation/watch_unity_install.py"
+                  },
+                  {
+                      "sha256":  "ccf14ca237820d6ca6f1d7d3a19f1796ba920d0b5d1bab633d5fd1b2c0c0d4e0",
+                      "path":  "automation/weekly_disk_cleanup.ps1"
+                  },
+                  {
+                      "sha256":  "aed58d46e52e2d0987167aebffac40d70e11a8dd4b0c29a560a4b79f2e56f93d",
+                      "path":  "automation/winproc.py"
+                  },
+                  {
+                      "sha256":  "c7222f0cc6ebd43463679806830224a1209d6ef992106610d1912eb2b154d31e",
+                      "path":  "automation/wire_activity_bus.py"
+                  },
+                  {
+                      "sha256":  "ab71c5bcc30b377e08908d7bda8e38d01e47af682a790e406bd6d7af8ddae768",
+                      "path":  "automation/wire_brain3d_overlay.py"
+                  },
+                  {
+                      "sha256":  "343cbd976c75ce40e0af2fd1791f8ba9565d00fa33ffcb8824ecf08bc48f2e6c",
+                      "path":  "automation/wire_live_models.py"
+                  },
+                  {
+                      "sha256":  "a2a4130b52d963e75b45b99372390e889ad3ea91d1077035fa4873905e898da8",
+                      "path":  "automation/wire_string_brain_drive.py"
+                  },
+                  {
+                      "sha256":  "4c07de7448b2b362428badce381f68e1186f0694a9132fdb59df7066abd1b179",
+                      "path":  "automation/zip_stream.py"
+                  },
+                  {
+                      "sha256":  "f3214244bfc806aca52cc184d98469b96db07b4cdb3c32d4d966842f7041eabb",
+                      "path":  "autonomy_heal_config.py"
+                  },
+                  {
+                      "sha256":  "1eceb47688487abd001038a907621974e95bad74fe7b46cfc2e0e12a36b13685",
+                      "path":  "backup_repos.py"
+                  },
+                  {
+                      "sha256":  "7873980cdbc34699f0f607a94c1a9723602bb8cdb7e6b7498c37fdef63cb2681",
+                      "path":  "baseline_summary.py"
+                  },
+                  {
+                      "sha256":  "e05fdcb50db8b75be7e47ed31b92a7d77b7cf272e69e256add269cebb2ed5265",
+                      "path":  "build_finish.py"
+                  },
+                  {
+                      "sha256":  "e38d9c96fccfa3ebb99947c3efe2d8931005b9078b64b91f06d86c2500d517d1",
+                      "path":  "build_now.py"
+                  },
+                  {
+                      "sha256":  "375244950c5649bc5d6d27c936522d1ea5413fe3cee85bb3fdf1a67011a63f3a",
+                      "path":  "check_attribution.py"
+                  },
+                  {
+                      "sha256":  "29c34419d393c1adf65759c574eee81f1b10c10c5a406b6752be8196d8893a41",
+                      "path":  "check_ci.py"
+                  },
+                  {
+                      "sha256":  "e0ed7f05e3a4a776d60d2b880783de1ea8ed7d487b3a2f82c940a250b2cf9292",
+                      "path":  "check_email.py"
+                  },
+                  {
+                      "sha256":  "dc4245df7f37832fc01e1a0a361019611da612c9653922e285297b1d5dce9751",
+                      "path":  "check_identity.py"
+                  },
+                  {
+                      "sha256":  "6aad151b5cdf1430d89ee2c28d008a60dcea8b4f3ff3455f2cf27d4206499d61",
+                      "path":  "check_leak_status.py"
+                  },
+                  {
+                      "sha256":  "228654b14c4e68ae58cd074ad19fbd024312cad3cc9cc878f87439a1ce881964",
+                      "path":  "check_rebuilt.py"
+                  },
+                  {
+                      "sha256":  "8418b840f3f1e9111b20e4fd372e29c5da1a0a94effa59e4285e52daab0075c0",
+                      "path":  "ci_annotations.py"
+                  },
+                  {
+                      "sha256":  "3c934fc41514061574a64412b48891788660fbf6852823263659b7b0d2e68884",
+                      "path":  "ci_billing_timeline.py"
+                  },
+                  {
+                      "sha256":  "2ee34051e514197c2723caebc020943ad422f912c917c48b0b2a5bfc2f43125e",
+                      "path":  "ci_diagnose.py"
+                  },
+                  {
+                      "sha256":  "129f8a599d7df404d70656ca5662c4903321534715870011156a37651299b958",
+                      "path":  "ci_log_debug.py"
+                  },
+                  {
+                      "sha256":  "779a620d48fa30953bc388c233ec6b1d8e05bf7b46c078bb1220f910a68cea19",
+                      "path":  "ci_logs.py"
+                  },
+                  {
+                      "sha256":  "4cb3b2a07a2fc3d1d5502b2905ade6241a3e6e4e28f39a0a5358b063072efc33",
+                      "path":  "create_via_template.py"
+                  },
+                  {
+                      "sha256":  "3135459cc603123c25745aa0cbc4a024b5eca2922cc1b6d369e26a5e6f481724",
+                      "path":  "dedupe_i.py"
+                  },
+                  {
+                      "sha256":  "ecef02c94630851eb965cb91b8267fe11699027348bcb74524c012646aa41bec",
+                      "path":  "delete_repos.py"
+                  },
+                  {
+                      "sha256":  "67512dc9e681fc6445fc7649adda7000340b6c3e85f1ad16eab954988389bcd3",
+                      "path":  "deploy_layers.py"
+                  },
+                  {
+                      "sha256":  "43c80f0667d72286497f5cc75750add56d0dba584407ad5cda56817364ccd287",
+                      "path":  "docs/unity/UNITY7_MIGRATION_VERDICT.md"
+                  },
+                  {
+                      "sha256":  "74a30cc874f2f85e1026913b01a94ca5e8c16c38edef2a167d1a4e134598b4ca",
+                      "path":  "docs/unity/UNITY_MODULE_CENSUS.md"
+                  },
+                  {
+                      "sha256":  "933b4a2bd4548a7c1d8ece6ac285781fd40ff037107c27d2f6dae623b474f13d",
+                      "path":  "docs/unity/unity_module_census.py"
+                  },
+                  {
+                      "sha256":  "d749d8c19f63faf1aedebf71de937e329629112ea7dd9b2bd6633f8ca9d99371",
+                      "path":  "drive_walk.py"
+                  },
+                  {
+                      "sha256":  "d014e05db39b1034072ccdb495adf99c80913a470805b968f6bde66a4afa8e3b",
+                      "path":  "drop_rebuild_stage.py"
+                  },
+                  {
+                      "sha256":  "8c13561a54ca17bb23edd907ce5ded0bc09f128882ab0eef2f344ea08674cb09",
+                      "path":  "find_line62.ps1"
+                  },
+                  {
+                      "sha256":  "16359169d0d7a15362c3d0428ddceeed3e4b274e8b20f7694adb9510c2042ec4",
+                      "path":  "find_line62_probe.ps1"
+                  },
+                  {
+                      "sha256":  "1443bbaebc627d4a2b03a9d886f2795400621067b356ed34300d29568f3ef08f",
+                      "path":  "find_long_lines.ps1"
+                  },
+                  {
+                      "sha256":  "1abb384bd9246498cd3deafc4419fa417d84cef8bbf8c5146ebbe59c66d1687a",
+                      "path":  "find_long_lines_deep.ps1"
+                  },
+                  {
+                      "sha256":  "15cf7f3f0ffbb9af4f7f35f4869724ab5bffee9dac5c90ea77031fea5e845028",
+                      "path":  "fix_adb_discovery.py"
+                  },
+                  {
+                      "sha256":  "5585a0c36cd7a1831dd3635802c45335dbff2892f8ee460b1e8198a22514d459",
+                      "path":  "fix_agent_bus_targeting.py"
+                  },
+                  {
+                      "sha256":  "e1c1b58505a8108ee1b85fae3220c6089747d57e11d305cd949a2c8a5f2c4bc0",
+                      "path":  "fix_agent_core_service.py"
+                  },
+                  {
+                      "sha256":  "8b2b841d2727f147992167d09b9099e0b0892d699fcd5310ba24aa9d440d09a3",
+                      "path":  "fix_align_sees_pythonw.py"
+                  },
+                  {
+                      "sha256":  "ae42f5ed0cc5c2b0685a081f769a3b5b3bc520b2e62988642ca6f4080baece63",
+                      "path":  "fix_align_shim_pairs.py"
+                  },
+                  {
+                      "sha256":  "ea2737425c608c4a27eddfaf8824dce1610078cd32fe39c90ddc704b59e85f12",
+                      "path":  "fix_align_term_mjs_allowance.py"
+                  },
+                  {
+                      "sha256":  "fb4c62b93c572932b0583d708c276ac54147b2342b5f3102c95744f2ad674993",
+                      "path":  "fix_autonomy_probe_auth.py"
+                  },
+                  {
+                      "sha256":  "fe1ca6c81402f7a2fdd4624bee7d058a385a602c272886bebbd8e8219f604ca4",
+                      "path":  "fix_autonomy_tick_order.py"
+                  },
+                  {
+                      "sha256":  "2b35dcac06d93da1b2b3d27a890dca3232b6a8219bf860b7c041aeecc23ac9af",
+                      "path":  "fix_bind_grace_per_service.py"
+                  },
+                  {
+                      "sha256":  "453c93af14070b63c10c64f97f9d283ac8ebfc9f9fc1471000c89bd9ec353ca8",
+                      "path":  "fix_buildloop_warm_auth.py"
+                  },
+                  {
+                      "sha256":  "0ea81bd6189c1b71772fbe7de00b77db04d0e4d5c71418dc3f627c35f8dc68d1",
+                      "path":  "fix_config_bom.py"
+                  },
+                  {
+                      "sha256":  "11409d28f222b97f8abbeae458cdf904bca2140a9e771d071263d0727b065b9c",
+                      "path":  "fix_edge_services.py"
+                  },
+                  {
+                      "sha256":  "be5d6f3ff0d0d2227b08b8ab6ccefdc0d5caf17b7300f4aff3853aba60218c09",
+                      "path":  "fix_future_imports.py"
+                  },
+                  {
+                      "sha256":  "c0ffeebc1c24727c86e0fa4b252f0864b9694e8cf8eb2ed8ec78f369f564ec31",
+                      "path":  "fix_headless_spawns.py"
+                  },
+                  {
+                      "sha256":  "8ce6ae07f6002db30d946761fda76d7b4ddbeda980329c9a45eb122c572f7339",
+                      "path":  "fix_headless_taskkill.py"
+                  },
+                  {
+                      "sha256":  "b8dc872b60b7b532df497363a9955bd1f4730a6a16fa6579886154cbe41a6f98",
+                      "path":  "fix_hermes_bat_key.py"
+                  },
+                  {
+                      "sha256":  "f19cfaa516054e089dd7051f0f849d1f6efb707cb35f619233ea3e3b776e4582",
+                      "path":  "fix_hermes_wiring.py"
+                  },
+                  {
+                      "sha256":  "b427d28ef44d87de35f463dd8ff54ccac6772c641179de282e39f3807a006181",
+                      "path":  "fix_import_side_effect_singletons.py"
+                  },
+                  {
+                      "sha256":  "6afed3ebf1f498f0439de88b54d57427917a7dbb1d0c4d562ded31123c5c4755",
+                      "path":  "fix_ipc_task_correlation.py"
+                  },
+                  {
+                      "sha256":  "964533c25c9a3a95d1af45103d8f20a152dc394f707433d1dcfad6505884409d",
+                      "path":  "fix_lan_bind.py"
+                  },
+                  {
+                      "sha256":  "f9bcc19877c69eee8a2bb2708766aa2b10c38428346442beb7c62ece8b0a7459",
+                      "path":  "fix_launcher_model_autoload.py"
+                  },
+                  {
+                      "sha256":  "4fa5717d25656a51c24baba962a799cea1e41c26fcd1406dd7b799002b3bf420",
+                      "path":  "fix_llamacpp_catalog_claim.py"
+                  },
+                  {
+                      "sha256":  "beb5ee940955936b986bf0ec6567d35158012be4066a2153c1f5225d36530197",
+                      "path":  "fix_llamacpp_winproc_import.py"
+                  },
+                  {
+                      "sha256":  "cd7d395e69be6fe295c60ad44c71ed5f5904103f61da21f4f8ffa03f038a7321",
+                      "path":  "fix_lmstudio_default_model.py"
+                  },
+                  {
+                      "sha256":  "f5f89cfca4c83c55da169f4e8ec0b8c4931b8b7c0bf4ffb3ad18a24e0cfdddbc",
+                      "path":  "fix_macho_field_offsets_test.py"
+                  },
+                  {
+                      "sha256":  "6e714f107dd355ece4b555ffccdd48fafaaa26d2cb93795e9e37d83d36100c66",
+                      "path":  "fix_macho_header_size_hint.py"
+                  },
+                  {
+                      "sha256":  "1458ac60bb45bdb4a267f5cab273b776512032ae62bed05c30574fc2d015f389",
+                      "path":  "fix_macho_hint_test.py"
+                  },
+                  {
+                      "sha256":  "cd8a9ff02795ec8fd0abfd2cb8df6a6e0440512860f3f1d367ce2c401325552c",
+                      "path":  "fix_macho_reader.py"
+                  },
+                  {
+                      "sha256":  "18c5fd35f540e3b94152b38207ed65278270d469b38eaec653b5f95b935b46c7",
+                      "path":  "fix_macho_table_sum.py"
+                  },
+                  {
+                      "sha256":  "b9a71dc354d3ec658e5ed52663b695380776d926d239cf441f153fc82af2a664",
+                      "path":  "fix_macho_table_sum_test.py"
+                  },
+                  {
+                      "sha256":  "d1967209908764aaf1f6bf9fe3a981711d094259229687f1e49b0f41de912939",
+                      "path":  "fix_mind_route.py"
+                  },
+                  {
+                      "sha256":  "58849bbd5ad8acdab28f900c7bbc92ec4e2567b22f7de2c5138bba754e834850",
+                      "path":  "fix_ops_absent_is_not_down.py"
+                  },
+                  {
+                      "sha256":  "1b1452f721ca3296a05b50f370e27ae6bcecdd8e60146f8386f884ec1c8aff65",
+                      "path":  "fix_ops_monitor_gpu_headless.py"
+                  },
+                  {
+                      "sha256":  "41e92a076efa18c6c896a3bec98116709a5c215a8367aa33a2fc6366639406be",
+                      "path":  "fix_ops_monitor_headless.py"
+                  },
+                  {
+                      "sha256":  "1b72cc150556edcaa6bd7cd7afc59f2071e7076203f7488b2820cde57f43f27a",
+                      "path":  "fix_ops_monitor_headless_proctable.py"
+                  },
+                  {
+                      "sha256":  "47e70081d2b7ce3727060042f3d139c95516f4968fe108c7ddb51534650a6db5",
+                      "path":  "fix_pidfile_empty_window.py"
+                  },
+                  {
+                      "sha256":  "880ad46a1fceff1807ccd54b64921c9cd2ed427a35336173d5caaad57c8049bf",
+                      "path":  "fix_process_match_false_positive.py"
+                  },
+                  {
+                      "sha256":  "b6ba2c1294903cbc1115ed6b58737a4fc7ba141898a8ce67d7e0bef032198125",
+                      "path":  "fix_role_lock_import.py"
+                  },
+                  {
+                      "sha256":  "9e0c90722b67b1aceeec36531b0b38848aacd18d9499826b5d093846b34e2fc6",
+                      "path":  "fix_role_lock_skip.py"
+                  },
+                  {
+                      "sha256":  "7668d5005d7b735636c33203dce47ad0b2033f23ba332f857aec1d3e19b83e7a",
+                      "path":  "fix_role_lock_test_flake.py"
+                  },
+                  {
+                      "sha256":  "7e78677dafbe05f652e2c33eea9c895bb14b032058b62753b147604be17555ff",
+                      "path":  "fix_secret_scan_fixtures.py"
+                  },
+                  {
+                      "sha256":  "56cc67b36d9f4e8c804ec8f896bd7b2e796eba43263534ed93f71ce135b8dabb",
+                      "path":  "fix_singleton_path_scope.py"
+                  },
+                  {
+                      "sha256":  "49f3b6d7b7598851e52ce5d589bd0e7ed1f6d4b7d7d4010079b1d6018a917c3f",
+                      "path":  "fix_singleton_pid_reuse.py"
+                  },
+                  {
+                      "sha256":  "633fdd719617acb0f138a9517ab0369cf0c3457cdf8dd3075d7ef295b3280a16",
+                      "path":  "fix_supervisor_blocked_noise.py"
+                  },
+                  {
+                      "sha256":  "074a5be3544a0a83831ef67af3f2447c2d3007aef23074ad55cff66fe236528d",
+                      "path":  "fix_supervisor_heartbeat_order.py"
+                  },
+                  {
+                      "sha256":  "e8ca9cd7874d4310d3f17a7eff99df493b2669c8aecab587e4774cd26cbf7db1",
+                      "path":  "fix_supervisor_lmstudio_autostart.py"
+                  },
+                  {
+                      "sha256":  "2f966fc1b92a52faf9bfcc533d9c9b54c56f237a9f8739ebdfab34021037d28a",
+                      "path":  "fix_supervisor_once_coexistence.py"
+                  },
+                  {
+                      "sha256":  "191a7a80fddbe9f78a67e6b3c11d0d9a09c95ab739c2f052e7512da5acaad71e",
+                      "path":  "fix_supervisor_pid_reuse.py"
+                  },
+                  {
+                      "sha256":  "ed815ba7150b0df00fe7f5fe1785e5dd75ee813f4e39693dba8fc0556dd5bcba",
+                      "path":  "fix_supervisor_pidfile_race.py"
+                  },
+                  {
+                      "sha256":  "cee7f6e242b6b011b70f9b7be7f68de7839964d35ccdb2834a649f952b70d45c",
+                      "path":  "fix_synaptic_checkpoint_recovery.py"
+                  },
+                  {
+                      "sha256":  "19b6478d4ac759542a47dbee9fcc6663232f67ec04b8d4cf6aed6abb1d96668d",
+                      "path":  "fix_tick_identity.py"
+                  },
+                  {
+                      "sha256":  "2481fd4bfae1d1d112f9131a26fc5849f91961ac2f4cd4c66d589f100903acfc",
+                      "path":  "fix_triune_service.py"
+                  },
+                  {
+                      "sha256":  "636c76f07a749d008ab3395ba0d234497d593901c8c7e4fa3db8ad295ea18f9b",
+                      "path":  "fix_ui_lan_bind.py"
+                  },
+                  {
+                      "sha256":  "b71e9ece4f707ef53dc58e6beffe295626fd754339263e2f27b02f985117f60e",
+                      "path":  "fix_unity_compute.py"
+                  },
+                  {
+                      "sha256":  "86651fc427234c70d4aea3dbb88248331eb94dfeba5aed6e735ecaff76161b07",
+                      "path":  "fix_unity_compute_kernels.py"
+                  },
+                  {
+                      "sha256":  "fc703dd8f5112b7bdb877b8c5652aa9c9cff688f27c641d02113d775a506e2b0",
+                      "path":  "fix_unity_state_vector.py"
+                  },
+                  {
+                      "sha256":  "d1a7e97b17de9de00b96a546638f809c45bdc927e2159c527c585fd0ac81fd3b",
+                      "path":  "fix_verifier_started_after_snapshot.py"
+                  },
+                  {
+                      "sha256":  "d8ad8e417feda3e7e92bb29230a7d6d988bac055685d93f3d5cc0fed37a5d3f2",
+                      "path":  "fix_verify_tick_handover.py"
+                  },
+                  {
+                      "sha256":  "7cae03e593f00e750edc9d9d71508167b7eba0605bd9eb0605b033c7b23c64dd",
+                      "path":  "fix_verify_tick_handover_tests.py"
+                  },
+                  {
+                      "sha256":  "76d4af7988f2c2c1c5e3f7b32aab8579257749233b675be172c5a96d18f2a86c",
+                      "path":  "gate.sh"
+                  },
+                  {
+                      "sha256":  "3e153c62c002b090185e9d0d1f92866a9574487e27e038ceb61efa12aedf7535",
+                      "path":  "gate_test.sh"
+                  },
+                  {
+                      "sha256":  "cf7f0cc89c8d46bc09335dce2ccfd7108ad818a9eccf3fac2a8112d85a20495a",
+                      "path":  "launch_walk.ps1"
+                  },
+                  {
+                      "sha256":  "38d30d5cd35777d98fa0dbf3a6672b8315d7c472257c991fcc756b7644c12205",
+                      "path":  "launchers/ABRASAX-FloatingBrain.bat"
+                  },
+                  {
+                      "sha256":  "4b4ae224a35e40e9523183bf7b34cb970a319ca78626a6cebd45a9932ef90492",
+                      "path":  "launchers/abrasax.ps1"
+                  },
+                  {
+                      "sha256":  "d2d7842574ef113efab02b8a11516b41d17077d90e757085c6dabc463719fad0",
+                      "path":  "launchers/abrasax_one_stack.cmd"
+                  },
+                  {
+                      "sha256":  "9276bf61a451fd1783ac9691bb55a88f401ee4c1aa52266e7c16ef0357568b05",
+                      "path":  "launchers/boot_abrasax.cmd"
+                  },
+                  {
+                      "sha256":  "8e12cb2cc73f40145a6821b50d2e7ef76bf4171e6485a96d26c44a8ae288e530",
+                      "path":  "launchers/launch_sovereign.ps1"
+                  },
+                  {
+                      "sha256":  "5d0f9dd7f91ece0a366e62144873a37d77a72daab2811a8853432b5d028c6fcb",
+                      "path":  "launchers/rust/rust-root/ACCELERATE.bat"
+                  },
+                  {
+                      "sha256":  "f2064be9fa343d426f96fb42b5eb0eaf5b88c547aa2308b526ccde762b4b7cfc",
+                      "path":  "launchers/rust/rust-root/ACCELERATE.bat.bak-20261017-2318"
+                  },
+                  {
+                      "sha256":  "06c68ef68e14fb2d45d0a4c771a4b935be81429da569f93c4428ee9f28211195",
+                      "path":  "launchers/rust/rust-root/ACCELERATE.bat.bak-20261017-2319"
+                  },
+                  {
+                      "sha256":  "8f03890c245736a074821a82c891eba706670808ef44d7f10f8d5a136e7517dc",
+                      "path":  "launchers/rust/rust-root/AUTO_EVOLVE.bat"
+                  },
+                  {
+                      "sha256":  "736aa7a9b9ca9aca5f5b935ed3e6a310572cffb0c5338011fae9daf1b8ab2078",
+                      "path":  "launchers/rust/rust-root/AUTO_EVOLVE.bat.bak-20261017-2318"
+                  },
+                  {
+                      "sha256":  "511afb31fa5b186724219c55b762f9c43fd1b0112a894e20881ef7e823e23ca3",
+                      "path":  "launchers/rust/rust-root/AUTO_EVOLVE.bat.bak-20261017-2319"
+                  },
+                  {
+                      "sha256":  "b2d4b5f34b7f158a8b42c33ceb55d706fde6ca19f6bc14cb9eea3cca8571e489",
+                      "path":  "launchers/rust/rust-root/EVERYTHING.bat"
+                  },
+                  {
+                      "sha256":  "645fa5f474b99f05ae9992561b0ce24e6b9b4ce55bdafcbba4dd74ab00b08099",
+                      "path":  "launchers/rust/rust-root/EVERYTHING.bat.bak-20261017-2318"
+                  },
+                  {
+                      "sha256":  "478a380604d553550d9856f73c4504e2295503d45fbd42716d3baa2d325efe30",
+                      "path":  "launchers/rust/rust-root/EVERYTHING.bat.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "8e103c097459d6fb47bd1a8587b5aa133952fad811007edaac4fd4afd79d16cd",
+                      "path":  "launchers/rust/rust-root/LAUNCH_VISIBLE.cmd"
+                  },
+                  {
+                      "sha256":  "82556c3c41aa407009f23d29e75714d8695ff0a63f0581d39897fccc18948164",
+                      "path":  "launchers/rust/rust-root/LAUNCH_VISIBLE.cmd.bak-20261017-2318"
+                  },
+                  {
+                      "sha256":  "2f40562b6cb6887af0df63768b3a949f64650d2058537b63fca1ecafd084073c",
+                      "path":  "launchers/rust/rust-root/LAUNCH_VISIBLE.cmd.bak-20261017-2319"
+                  },
+                  {
+                      "sha256":  "287c16cdc12a510e471334c8a43a7d1b67b3ab3f8910559cea729f4a4cdb59d0",
+                      "path":  "launchers/rust/rust-root/OSIRISBLXCK.bat"
+                  },
+                  {
+                      "sha256":  "64b2e45634cfad563cfb48013a796c2d6817bfbfdce99a9f4aac59cc48a8ec59",
+                      "path":  "launchers/rust/rust-root/OSIRISBLXCK.bat.bak-20261017-2318"
+                  },
+                  {
+                      "sha256":  "d2ff7a5a730ac2821e0f4ff2c26be3b315b154e1c013976cc2c8b0313fb9da19",
+                      "path":  "launchers/rust/rust-root/OSIRISBLXCK.bat.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "f126a8ae102551d11d46252d82d37a0ed3151165fecc605930b009ca74585c54",
+                      "path":  "launchers/rust/rust-root/STARTUP.bat"
+                  },
+                  {
+                      "sha256":  "a3cb180787627fcf215573a764353932e3ee7ac3ca1f24a0bbaf3a8c69465d28",
+                      "path":  "launchers/rust/rust-root/STARTUP.bat.bak-20261017-2318"
+                  },
+                  {
+                      "sha256":  "0032ca35eb9b8153a5951bd93f02104093f41f81cd0058d3b7f87e8ee79ed8bf",
+                      "path":  "launchers/rust/rust-root/STARTUP.bat.bak-20261017-2319"
+                  },
+                  {
+                      "sha256":  "e58a953ff0b4b91ca7e146c84f42098da93bbecaf9f2b781a8db9abba1c0592c",
+                      "path":  "launchers/rust/rust-root/START_SYSTEM.bat"
+                  },
+                  {
+                      "sha256":  "fcd7e560c1c0b82d03baca8c771c7716334b732dfef9e24759a5a2fa5e4298e2",
+                      "path":  "launchers/rust/rust-root/START_SYSTEM.bat.bak-20261017-2318"
+                  },
+                  {
+                      "sha256":  "9218f92573c6a053e81a6e33a128c506e5edba2f5068a844c209c254ffa5934b",
+                      "path":  "launchers/rust/rust-root/START_SYSTEM.bat.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "f790bb7936dae3f3d8f4905bd2cf4d49920c70d84ea57868213573ef36ade043",
+                      "path":  "launchers/rust/rust-root/abrasax_core.cmd"
+                  },
+                  {
+                      "sha256":  "83808c4bbe673818abec1da0933ff52083ce1eba5782355f06b79c2571352b42",
+                      "path":  "launchers/rust/rust-root/abrasax_core.cmd.bak-20261017-2319"
+                  },
+                  {
+                      "sha256":  "6b1e0dad943a57c16812622b76af942a09f9481335c021fa0c42e7c593e4e332",
+                      "path":  "launchers/rust/rust-root/gemma_optimizer.ps1"
+                  },
+                  {
+                      "sha256":  "6c749b478baa872364322df51f3e1513c92f7f526aadabb8de3ec410a2c20de6",
+                      "path":  "launchers/rust/rust-root/gemma_optimizer.ps1.bak-gemma-20261101-213539"
+                  },
+                  {
+                      "sha256":  "d98c062acf8dae4e603ea95544f3c0c740dc02623a5c7678decf07ea532af42f",
+                      "path":  "launchers/source/ABRASAX.bat"
+                  },
+                  {
+                      "sha256":  "b0b1bd67d1bc910a7e0d4f6cb453ccaee86300ffcbcc062376b6f5fbed38316d",
+                      "path":  "launchers/source/ABRASAX_FUSION_COCKPIT.bat"
+                  },
+                  {
+                      "sha256":  "30b0ec421e64ced266678c2a190b06aceee6db38089b476984376e69c413b3ea",
+                      "path":  "launchers/source/ABRASAX_UNIFY_AND_IGNITE.ps1"
+                  },
+                  {
+                      "sha256":  "30ca66a3ecdfbc7e9aac65663c3a8e545efe443744296cbd35aa998e25250dc8",
+                      "path":  "launchers/source/application_starters/ABRASAX_FUSION_COCKPIT.bat"
+                  },
+                  {
+                      "sha256":  "382021b759c24cec92a20e0a33083b16eb2cd3a5d232a55b649c6b55cb846e1c",
+                      "path":  "launchers/source/source-root/ALL_SERVERS_ELEVATED.bat"
+                  },
+                  {
+                      "sha256":  "535100a072385f27b74c9d8808cc4dc3cc50068d9535186697d58ce24fea46b2",
+                      "path":  "launchers/source/source-root/ALL_SERVERS_ELEVATED.bat.bak-20261017-2318"
+                  },
+                  {
+                      "sha256":  "7905596b50abfbef1f5006d51d5856359290cf73c84f89c98832564e0c735e31",
+                      "path":  "launchers/source/source-root/ALL_SERVERS_ELEVATED.bat.bak-20261017-2319"
+                  },
+                  {
+                      "sha256":  "a59ebe9fddf014ae04c1b3079096f17a377730bdad92f1e3eb795f1b36dbaa99",
+                      "path":  "launchers/source/source-root/CRON_MASTER.bat"
+                  },
+                  {
+                      "sha256":  "77f94af0442b91f75daf1b01e0590c5a6cbff41587caf1d2378bade6366ca7fb",
+                      "path":  "launchers/source/source-root/CRON_MASTER.bat.bak-20261017-2318"
+                  },
+                  {
+                      "sha256":  "95702bbc431ed139eea59f868c28feb7b60321fd17e1fd59b00c7f0358fe1c06",
+                      "path":  "launchers/source/source-root/CRON_MASTER.bat.bak-20261017-2319"
+                  },
+                  {
+                      "sha256":  "1f6f911a81414841a12af09501089936bc9e4b3f9e6f67c61fb2bfe9ad4f9892",
+                      "path":  "launchers/source/source-root/Claude Code CLI.bat"
+                  },
+                  {
+                      "sha256":  "996e40ba41c1d66fd5539f81cc5dde6ff095b3d7cce5043af56c5a52e4253b6b",
+                      "path":  "launchers/source/source-root/Claude.bat"
+                  },
+                  {
+                      "sha256":  "64669dee3322ef1ac5948e4a47abd62840ebee021edb7b633a2c9d0e27c25b0b",
+                      "path":  "launchers/source/source-root/HERMES_TUI.bat"
+                  },
+                  {
+                      "sha256":  "765eb3e696ebe5c9e8ae4ad8d32aaf511a1aadd2c01895d7e3587a861aa3bb33",
+                      "path":  "launchers/source/source-root/HERMES_TUI.bat.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "47e22d32658b16e481d9b5e1761c3da02ca566d9f5ca282ab2d0aa0942cd78bf",
+                      "path":  "launchers/source/source-root/Hermes.bat"
+                  },
+                  {
+                      "sha256":  "f2b117221f7021af0815d3e9bb2ea933bb739569a2953e51064e70b0148db929",
+                      "path":  "launchers/source/source-root/Hermes.bat.bak-keyfallback"
+                  },
+                  {
+                      "sha256":  "f6711b2149cd1888e5bd909124d96757098858f05621b631ea50a0a28c8eb3ef",
+                      "path":  "launchers/source/source-root/Start CUA Daemon.bat"
+                  },
+                  {
+                      "sha256":  "1fb1d20c647cbd7358544e6dd26cc6cc185c1f5f63123c54375ff6ca58550430",
+                      "path":  "launchers/source/source-root/Start CUA Daemon.bat.bak-20261017-2318"
+                  },
+                  {
+                      "sha256":  "4c68d4fb739599d32f79b1b8f648ba13525f9ce05fd79fcd31264cb78c4ccf3c",
+                      "path":  "launchers/source/source-root/Start CUA Daemon.bat.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "5a0aea51623518b9381caddf9b3b3221f710bf574808eb1b5faa1c70f94c1d62",
+                      "path":  "launchers/source/source-root/abrasax_core.cmd"
+                  },
+                  {
+                      "sha256":  "082cde8282c039834288a3dbca378d789120ef082f57432309bc4e28d6c789b5",
+                      "path":  "launchers/source/source-root/abrasax_service.ps1"
+                  },
+                  {
+                      "sha256":  "67966d52288066c58e8fa622a09c4cf337d0b26979bf675eb5e7687d81de89fd",
+                      "path":  "launchers/source/source-root/admin_unlock.bat"
+                  },
+                  {
+                      "sha256":  "ada7f41e4ac3ea59008a65e7b61388846c6a7675b8d5ad5e685b2a954086bc81",
+                      "path":  "launchers/source/source-root/maintain_gateway.bat"
+                  },
+                  {
+                      "sha256":  "af142594984c1d48be411ac00e68106c6e3cff3e683abfb8d7589d24f25ddb6c",
+                      "path":  "launchers/source/source-root/run_hidden.vbs"
+                  },
+                  {
+                      "sha256":  "2a0b0b2b22364f53a8de4333565e745521472132b5eaf11a506c49e3cd1ea1de",
+                      "path":  "launchers/source/source-root/setup.ps1"
+                  },
+                  {
+                      "sha256":  "d3bf0925c094975e2a78435eac67879e3e9dcd570932d7227b27d3ed1feb3406",
+                      "path":  "launchers/source/source-root/setup.ps1.bak-20261017-2319"
+                  },
+                  {
+                      "sha256":  "201c47cceeddcd2ce04c4135a2817fd5051a2fe83d0ffbcc44f189bf4e2aeb72",
+                      "path":  "launchers/source/source-root/start_gateway.bat"
+                  },
+                  {
+                      "sha256":  "e7a54c973d4114d0e2e61e52566467c672d50769d0593c69e5edcc20fee10cc7",
+                      "path":  "launchers/source/source-root/start_god.bat"
+                  },
+                  {
+                      "sha256":  "772a3a49a0682e6007515dcfccd22db3b143015bf4ad3128f3f23eb5c192762f",
+                      "path":  "launchers/source/source-root/start_service_host.cmd"
+                  },
+                  {
+                      "sha256":  "302ff98a80423fb9d15eb35b1f323955cd69f07ffec5ae80e430740884a879b1",
+                      "path":  "launchers/source/source-root/start_synaptic_brain.bat"
+                  },
+                  {
+                      "sha256":  "8e1e53b77080da36f6eede963e292561f470107e40bc10edf94fe27b8496476f",
+                      "path":  "launchers/source/start_autoloop.bat"
+                  },
+                  {
+                      "sha256":  "f4f08b9c8677c4a1e14e953f85fef1a33d8e83567c24594dc413801ad62f3125",
+                      "path":  "launchers/source/start_autoloop.bat.bak-20261017-2319"
+                  },
+                  {
+                      "sha256":  "22863d282e5abcaa7ce040973b4886ad5eb7a2822efc146ab5a631b1ed16266d",
+                      "path":  "launchers/start_abrasax_stack.ps1"
+                  },
+                  {
+                      "sha256":  "1d1cd528f3c22410aed7079aebcabed774e0148905fcf5f4eced63dd851a02be",
+                      "path":  "launchers/start_abrasax_stack.ps1.bak-gemma-20261101-213539"
+                  },
+                  {
+                      "sha256":  "9a422dce364e44fd9656f09b829c2a2458b13fd11568d951ca06758d0c61c414",
+                      "path":  "launchers/start_abrasax_stack.ps1.bak-modelautoload"
+                  },
+                  {
+                      "sha256":  "9a422dce364e44fd9656f09b829c2a2458b13fd11568d951ca06758d0c61c414",
+                      "path":  "launchers/start_abrasax_stack.ps1.bak-models-20261101"
+                  },
+                  {
+                      "sha256":  "277001aa3e21ff5bd1d8d1116d9b72a8d17119b7d6afced6cfe742d692a4b14f",
+                      "path":  "local_ci.py"
+                  },
+                  {
+                      "sha256":  "9d511e5904754f07deb8a68692ecf059d7a080949b333c1a5426d35bc2ef88c2",
+                      "path":  "local_first_routing.py"
+                  },
+                  {
+                      "sha256":  "49f27f8b005b5035707a6b007d04d00a919c6a50d42c2b8212a929e5be196685",
+                      "path":  "make_report.py"
+                  },
+                  {
+                      "sha256":  "2c952f42fe8eeb09c93c9089a3674f724344384ae15b41ee9cdd999a3f5f7610",
+                      "path":  "offload/offload_s25.ps1"
+                  },
+                  {
+                      "sha256":  "0dd9b046d18bec71fd7dc7dde8f1431ec51eb2a8119942a6848f6f78f513c9f7",
+                      "path":  "offload/offload_s25.ps1.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "638466ea32dcc7d248976a9c324a386e89b04378b3af4421b57693775d29309b",
+                      "path":  "offload/reclaim_s25.ps1"
+                  },
+                  {
+                      "sha256":  "923c9e9ae05adff788651dceac2ee6d162fa4f25a731a2bd77ae1fad378a9eab",
+                      "path":  "offload/reclaim_s25.ps1.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "786d67d2e4129aee8f1ccd588c3d132fd7312566fd30ae50cbd1708ba3853103",
+                      "path":  "offload/rolling_offload.ps1"
+                  },
+                  {
+                      "sha256":  "5cdc9c0c420aee90960dd07ce93dab3397a3437ede063f737206c085a6c6dca3",
+                      "path":  "offload/rolling_offload.ps1.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "652fdccaaed754c51baf923e077dc78bc5d212b08795accf34de49cdc7625e99",
+                      "path":  "patch_create_attempts.mjs"
+                  },
+                  {
+                      "sha256":  "f4e2ff1b9df72d983487211297b5ff32ce3c4a080fda44932bc5a8e040e6d9ea",
+                      "path":  "patch_rebuild_empty_mirror.mjs"
+                  },
+                  {
+                      "sha256":  "d98e9b2e20b2844f8de85bc4a03b866ed5e883df0bde15bcbd82e2bdfe755b9c",
+                      "path":  "patch_rebuild_gate_resume.mjs"
+                  },
+                  {
+                      "sha256":  "cce301e718232ee80a7832331a46c171d3c60abf8de71190af512040030a2a6c",
+                      "path":  "patch_rebuild_resume.mjs"
+                  },
+                  {
+                      "sha256":  "e24ac4f571253f2348dbd30581ad425f28a7ee147bd34db2476dca6c84640c8e",
+                      "path":  "patch_repo_cred_reset.mjs"
+                  },
+                  {
+                      "sha256":  "4c89d4f09c36b033127cb929c7563ae4a1ae5b42303cc48b580a03657dba97eb",
+                      "path":  "patch_repo_push_timeout.py"
+                  },
+                  {
+                      "sha256":  "7927aaa8c4bda062b5665c19cbcbb42639304d5a475ec3e58d92d1a65027da76",
+                      "path":  "patch_repo_token_env.mjs"
+                  },
+                  {
+                      "sha256":  "5d121b7d382d649aadc0e4498c6ee0bfa1e383f9b750f56bf4665efd90db27e7",
+                      "path":  "patch_sync_readback_retry.mjs"
+                  },
+                  {
+                      "sha256":  "1f51c53e90f8c019e710262c84f44ecdfa3ad90efe65f10c2a09619b774cb072",
+                      "path":  "patch_verify_restored_empty.mjs"
+                  },
+                  {
+                      "sha256":  "09609744c76d67ba4fc63b3d4c673d3c165dc58a2fdf6cc566a4fa0e02ef6d0d",
+                      "path":  "patch_verify_restored_sha.mjs"
+                  },
+                  {
+                      "sha256":  "1f7c7b4e7da8446c668f402139a7b3d1b674906ffaf9685b484e7713314d8f2d",
+                      "path":  "patch_verify_stack_run_settle.py"
+                  },
+                  {
+                      "sha256":  "2c444236f5ecb1b55b5bae3a643b8e948db57ee1a5c56e485bd7edf653a29bc2",
+                      "path":  "phone_link.py"
+                  },
+                  {
+                      "sha256":  "19d8cfd5618cc6f93a6776e177208f045788d9dc2e7aa979f71171828ce5813b",
+                      "path":  "pretty_json.py"
+                  },
+                  {
+                      "sha256":  "9c5bff4808bc1c392541d31e068fc6ee418444b9855725000d98af94619be98e",
+                      "path":  "prune_work.py"
+                  },
+                  {
+                      "sha256":  "a9c7fae2596a52dfd60ef99c2a5b81d909ddba10e87b1b97b5a939725307fd6a",
+                      "path":  "publish.py"
+                  },
+                  {
+                      "sha256":  "8fbc2debb71c2a46f7ddb92fbad7cc4dbdde85bb75320c0d9717e358b565dedc",
+                      "path":  "publish_now.py"
+                  },
+                  {
+                      "sha256":  "ec6e7d959cb4c332404f1da9475290b33481842791ad2252adeb5d3be31ed237",
+                      "path":  "pulse_start.cmd"
+                  },
+                  {
+                      "sha256":  "3765b5c2c8710c039b186e58d9678ef7419e132277b20be290ca2004c7ad0d6b",
+                      "path":  "pulse_start.cmd.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "ba1310eda26f2647e781fca6a013d8c926f58858a0e270bf1445df31f84c38c1",
+                      "path":  "pulse_stop.cmd"
+                  },
+                  {
+                      "sha256":  "45fe0ea025e18376e844c0a8b1afb6fd0c5ed10db818dc1313bad5e440b63510",
+                      "path":  "rebuild_repos.py"
+                  },
+                  {
+                      "sha256":  "80ae0912f793cf738f80815ca1960ff002252e40e6da5bfc9b9739cba5201e57",
+                      "path":  "rebuild_repos.py.bak-attempts"
+                  },
+                  {
+                      "sha256":  "c0f207f9c67fbd6c40fca4eb6392f7a7972820829130833a205510322e15983d",
+                      "path":  "rebuild_repos.py.bak-emptymirror"
+                  },
+                  {
+                      "sha256":  "45ff2aeb99ac53e73e1d3ee6c40b2e0a2ab2d26e1418c858b38b4981447cc779",
+                      "path":  "rebuild_repos.py.bak-gateresume"
+                  },
+                  {
+                      "sha256":  "a9354eb06b39bd58d4617bb107ff3f06f2677b1f6d459209e0bbf8b851701ba6",
+                      "path":  "rebuild_repos.py.bak-resume"
+                  },
+                  {
+                      "sha256":  "9fe54426ab7a8e9f3759f9bee7ef36c1557bd557da94b532a9165823065c2021",
+                      "path":  "rebuild_retry.py"
+                  },
+                  {
+                      "sha256":  "31432a0ebcec22accbe83ebf1d7bf33fa0ebf39a9277ca601c9f3680d0775592",
+                      "path":  "rebuild_seed_merkle.py"
+                  },
+                  {
+                      "sha256":  "e61465cb1c8bc84f87a2aecca8ab0d1eccf798b4c286f390d6bf374e855dfd12",
+                      "path":  "rebuild_seed_merkle.py.bak-20261018"
+                  },
+                  {
+                      "sha256":  "069939e007bcde5121df1c9b9beaf660f7eb5ef36178d6489524c01409cfbfe5",
+                      "path":  "rebuild_until_unblocked.py"
+                  },
+                  {
+                      "sha256":  "3cc4e716902dc70b3b8b188af70a427ec042eef0030d5f75076bd18385b4b648",
+                      "path":  "reclaim_c.py"
+                  },
+                  {
+                      "sha256":  "61ad445c1fb20b695404f3f85ac00678eb182bcc1717958e237e5d57791f09bd",
+                      "path":  "recycle_bins.ps1"
+                  },
+                  {
+                      "sha256":  "82a42f0ca1e04021cbd38d0b8f0f257c309746f892ff16a4381120d003bb8c73",
+                      "path":  "refresh_mirrors.py"
+                  },
+                  {
+                      "sha256":  "40fab2420df46ebacc6b29aee0fd8a3a5d1ca31ce45f81911596ad5f3b443d44",
+                      "path":  "reindex_drive_inventory.py"
+                  },
+                  {
+                      "sha256":  "4133df7218701e82d0be66dd808ed50e74a96ec6c1f760db8f76e151d04efcf0",
+                      "path":  "rekey_full_commitment.py"
+                  },
+                  {
+                      "sha256":  "334d074e22439b20c4531cbc6c0d9cbfc98d8752a4112fc52085a182e9482678",
+                      "path":  "release.py"
+                  },
+                  {
+                      "sha256":  "656dd1b5890cfea8af5e73a23abda8525a6d64ae72548c21fe1197d6a703dc10",
+                      "path":  "repin_merkle.py"
+                  },
+                  {
+                      "sha256":  "8ca568f2416a68a678e32183c424c3acfca6ce41689c8609e5bd20bb2e9dc39c",
+                      "path":  "run_team.py"
+                  },
+                  {
+                      "sha256":  "310f8cba1e9245a4f6b5c8c3f55be6ea75ea1582c40915b39ce1d848563bee8e",
+                      "path":  "scan_mirrors_for_pat.py"
+                  },
+                  {
+                      "sha256":  "4b0e8f3ed86f94ff13fa51e779204e6775bdf31a521c0495aab4ebc933cbdd1c",
+                      "path":  "sdkprobe/build.bat"
+                  },
+                  {
+                      "sha256":  "3685c52795327d9438693196069984eccff35ef9aff3cd44e9fbe97331311c11",
+                      "path":  "sdkprobe/build.out"
+                  },
+                  {
+                      "sha256":  "a52939842d0a8e17cb84cfb322c2a8bf58d0d2c73fa1f630a1e5057f98d7998f",
+                      "path":  "sdkprobe/sdkcheck.c"
+                  },
+                  {
+                      "sha256":  "32da371fde81cb1bf3ef29468191476e78deda7a6a09b3263ce5722df1073421",
+                      "path":  "sdkprobe/sdkcheck.obj"
+                  },
+                  {
+                      "sha256":  "d37ea0f539bd7e214af6ac60bf112ddf5220c7e317a81991cebccb4efa4e40a0",
+                      "path":  "seat_scan.py"
+                  },
+                  {
+                      "sha256":  "2b893119abb18132457d4a15b9c2b9275d44bf942d380c6682ea905dba193c75",
+                      "path":  "sense_tick.cmd"
+                  },
+                  {
+                      "sha256":  "bb66d2189c7c1a6c5460cfe7063fa81a2f9a9d3205c069e2da3f3418f0d611bd",
+                      "path":  "sense_tick.vbs"
+                  },
+                  {
+                      "sha256":  "93ff44c2dc68d0fec5c94d02031a63ad0241a7438d3897fbdea04d888fe3fb41",
+                      "path":  "sensors/s25_termux_forward.py"
+                  },
+                  {
+                      "sha256":  "7f4abef7cbb665e0c6eca405a69967b5a6a27c40a6eaa3f2fee6187874fd6f3a",
+                      "path":  "sensors/s25_world_capture.py"
+                  },
+                  {
+                      "sha256":  "10afa678f288b25058f203ce3fe80d2866072d56aa3cb6c22f0c958685857f80",
+                      "path":  "snapshot_repo_meta.py"
+                  },
+                  {
+                      "sha256":  "a1cedf7af68d3e3f90d8e0aef64cdefe883ae9feeab80a9c054dfa9044ab9260",
+                      "path":  "stage_all.py"
+                  },
+                  {
+                      "sha256":  "3164fe7945c3c31c8a42f09b7e37c48817dd6a397eb3b508276339a33fb2d9dc",
+                      "path":  "stage_index.py"
+                  },
+                  {
+                      "sha256":  "2d2ae3bcbcd2025ee06696ee3091e50a1664fb29f59f3557a6a205b1978f14e9",
+                      "path":  "sync_activation_state.py"
+                  },
+                  {
+                      "sha256":  "b5dfad418f4acd7f20b6c2b7603027852064dc3cb7bd91f2e55af778de4f0f10",
+                      "path":  "tools/_check_name.py"
+                  },
+                  {
+                      "sha256":  "00ec01bc09ba49d852c7923318a9a4ffa57dd3801d6b1fe4238e1f3b9663a20e",
+                      "path":  "tools/_fix_discover.py"
+                  },
+                  {
+                      "sha256":  "2c2a051d3fbde6e6d86dc4ff0c391919e74e508432a87a843faea24a2cd790d5",
+                      "path":  "tools/_fix_hwtest.py"
+                  },
+                  {
+                      "sha256":  "5aa43f342fd9314dd474a0d4a84267ec44d8d166605373d07f250a7a159630fa",
+                      "path":  "tools/_fix_name.py"
+                  },
+                  {
+                      "sha256":  "2cae352ea3d012e971bd9916d4285e07034d61f3d9c4071971aeef07dd75f2ce",
+                      "path":  "tools/_fix_name2.py"
+                  },
+                  {
+                      "sha256":  "5af5e4285376be44b30cf0e87478a5e5d62e9ab89b6f04d3f7eabf4abcdea62d",
+                      "path":  "tools/_fix_uitest.py"
+                  },
+                  {
+                      "sha256":  "85072039bb1e8b619fffa0cd0f17935e2213e41d9d7d04c634f69fdcc2de155a",
+                      "path":  "tools/_placeholder.py"
+                  },
+                  {
+                      "sha256":  "48c77ca5cb664753cd1f0fb770eac5b8fc61aef878ff49f164dce5b426a82d67",
+                      "path":  "tools/e2e_verify.py"
+                  },
+                  {
+                      "sha256":  "5d365bc684301a5732c12dd3a546017cb5ffcc5e7a4bda33d95b5bd71afc890c",
+                      "path":  "tools/e2e_verify.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "e5116cdc05f7b821f3c4a690485dc5fd77c05e80eafc81facabf2adba7b7d7ba",
+                      "path":  "tools/neo_infer.py"
+                  },
+                  {
+                      "sha256":  "3d9128007cc346f473dff14c0c600995a39f22b329ffc011e1127e0835524099",
+                      "path":  "tools/neo_loader.py"
+                  },
+                  {
+                      "sha256":  "4b75e455276869d8979d11ba3b955a61e586368f9d16e5a5e052f1fff40e670b",
+                      "path":  "tools/probe_deps.py"
+                  },
+                  {
+                      "sha256":  "1bf8602ce86e5943c20662087b3065808b55d9971af3a4c9164fd703d9b07645",
+                      "path":  "tools/probe_frame.py"
+                  },
+                  {
+                      "sha256":  "245316d7972fdae2ce09dfa8e65b78fa8dac323fe0ac36d5c0f7b4353a238566",
+                      "path":  "tools/probe_gravity_sign.py"
+                  },
+                  {
+                      "sha256":  "e65259907e4a0c252821e7cbc8fcfd79851d30f9e1028b8b107f4ded8f554bd1",
+                      "path":  "tools/probe_heading_agree.py"
+                  },
+                  {
+                      "sha256":  "7d04f30ffdd107cd70ce8c4c703a2b2789c6ca90858d817623e496d77fbbd319",
+                      "path":  "tools/probe_history.py"
+                  },
+                  {
+                      "sha256":  "36ee2baf929d80fd2fe092e11e17e247b793e675342dd39180046c18457269cb",
+                      "path":  "tools/probe_input.py"
+                  },
+                  {
+                      "sha256":  "b7b545db3c306c1ee69da0b88b60d174593d0a1dbbedf8f0c95b92e71c8d2e47",
+                      "path":  "tools/probe_input.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "b351aef9f1a32ed7b000009617f67ead362084c09071c7a8409e5918a97c686e",
+                      "path":  "tools/probe_layer_e_live.py"
+                  },
+                  {
+                      "sha256":  "e911b38ee97b3a5ad007e557242405fe69fe8646f48dded272848a8e547c72c3",
+                      "path":  "tools/probe_layers.py"
+                  },
+                  {
+                      "sha256":  "f73597e4aad7b07d1958582eaa80f1a6af37792f5f94a1415811b282822beecf",
+                      "path":  "tools/probe_mag_noise.py"
+                  },
+                  {
+                      "sha256":  "4bb75cc04e1a2798878a0a34c3f927015031862038c6be4fd76472c5b8aaaf0c",
+                      "path":  "tools/probe_motion.py"
+                  },
+                  {
+                      "sha256":  "97ee89bd3d010512ba4d23675ec5b431bd5f506f5bdb0f45caf83cf102d18122",
+                      "path":  "tools/probe_name.py"
+                  },
+                  {
+                      "sha256":  "f9bacb14d76a871fa114cd56a550aab557d9c12ca3fd2d3ff01afb951bfc52b0",
+                      "path":  "tools/probe_offline_real.py"
+                  },
+                  {
+                      "sha256":  "aa0006c7de19397884575b6835732631c09684e2e3c9035d9e1003ab3e760880",
+                      "path":  "tools/probe_offline_real.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "0abf32457027f2721836b0ddf5166ac25b8c25b8f8d677de8eb18cde9b53e38f",
+                      "path":  "tools/probe_orientation_live.py"
+                  },
+                  {
+                      "sha256":  "f69ac41b4c46e2e0e394ddecea69acf85ec8db08b9cf926085248e8917ce7fa3",
+                      "path":  "tools/probe_orientation_live.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "0a3af45b0b5d51e8e8775689db46cd924684cc8ff65ba0dcade332e9ba16b7b6",
+                      "path":  "tools/probe_origins.py"
+                  },
+                  {
+                      "sha256":  "50d6cee9a61216fa7d912ed0c59ac2b65843039816d30c046fe5eadf1fe8e6c9",
+                      "path":  "tools/probe_provenance.py"
+                  },
+                  {
+                      "sha256":  "60a1363a6fc736c7eee9f17705333d4fbb7bcf29233ec0227fe4592cef798f82",
+                      "path":  "tools/probe_qalive.py"
+                  },
+                  {
+                      "sha256":  "de6cff6d37c8ba39160250701d88bd070093c9d66d71d49808c2d2a8d81bfc6d",
+                      "path":  "tools/probe_qconv.py"
+                  },
+                  {
+                      "sha256":  "0e7d1b5c31b0f67c1668cf9ba8cbf1cfd95efc7897e67cc57148343c8a27616b",
+                      "path":  "tools/probe_sources.py"
+                  },
+                  {
+                      "sha256":  "8d4b790909b7f269ea6fb62e576584d86074b5c91a169bc731924a0d495ec338",
+                      "path":  "tools/probe_sources.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "36f89fc54afe6fa67ce87b023ed183b65ca3484875d5685bb9b403c161caa54c",
+                      "path":  "tools/probe_tclock.py"
+                  },
+                  {
+                      "sha256":  "a2e4cd2275a54cb73dd87120b223d837207553bdce4800d0a905882261b7ba0e",
+                      "path":  "tools/probe_tclock.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "d2f601740620563cb5490a52dbcd4c64045214aa21c18f8ccabfc49382093401",
+                      "path":  "tools/probe_time.py"
+                  },
+                  {
+                      "sha256":  "8d4f35398bdbabddd9ad11abb5544ba0ba00e85c45ac38ccd2150adfceada974",
+                      "path":  "tools/probe_time.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "320828de9f29190f0a421ac7926902af00e626e86c0a0aee73a48888d693eccc",
+                      "path":  "tools/probe_tracking.py"
+                  },
+                  {
+                      "sha256":  "81aa089403eae1d395c6deca77476c9683925c6b1143caa0397449bb5fa92c05",
+                      "path":  "tools/probe_uncertainty.py"
+                  },
+                  {
+                      "sha256":  "a781d4ebfd33b1a5dd92811906f344d4c6cb4dee46c883cc018e1596c675a3da",
+                      "path":  "tools/probe_uncertainty.py.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "075354990829227df7ba16f4e1bcc1646883af2846bed2e9df645a9fd05cae85",
+                      "path":  "tools/profile_brain.py"
+                  },
+                  {
+                      "sha256":  "72535fa9580136eef511084a3aabc2207f1ed19f841f1a26296b8e2951efb277",
+                      "path":  "tools/repair_venv.ps1"
+                  },
+                  {
+                      "sha256":  "7b6168029ebdf9a5071a640b2c7d9e563f3c943fce924b60ece90a177725d6d6",
+                      "path":  "tools/repair_venv.ps1.bak-pathfix-20261101"
+                  },
+                  {
+                      "sha256":  "7dbeb55a26b5ad2b217036e247a1a032302132621f636f681a8ce3d7e0f5d0da",
+                      "path":  "tools/repro_spawn.py"
+                  },
+                  {
+                      "sha256":  "5c789e4204aec7a93c8e2a85bbf2cc88cf18057a613ec6511b4c972dc7366a3d",
+                      "path":  "tools/task_probe.py"
+                  },
+                  {
+                      "sha256":  "f38936ec0c898c0a7f881e2a1bb9e6ecc2f7c082a84a11bdf3fcf39fb2d5c5ae",
+                      "path":  "tools/verify_senses.py"
+                  },
+                  {
+                      "sha256":  "9d0bf2616c48805bee361b50d78912f472802d536fa14bd634076d65780d3456",
+                      "path":  "triage_secrets.py"
+                  },
+                  {
+                      "sha256":  "be0236c5edba10a36672b18523b57412c507fb8775bf52f0c307a17d9a7ae3c9",
+                      "path":  "ui/abrasax_hud.py"
+                  },
+                  {
+                      "sha256":  "60962cda90f7ac09e7b762dc5b8b4b2ec49117e228bff605d4c23b56b7b7df1e",
+                      "path":  "ui/abrasax_hud.py.bak-20261017-1527"
+                  },
+                  {
+                      "sha256":  "7eebc8a7751de2d1dc198752215be910367049a07d08e0c29f3196a53f497f0c",
+                      "path":  "ui/abrasax_hud.py.bak-gemma-20261101-213539"
+                  },
+                  {
+                      "sha256":  "63b4766db1c60229cc45ba4110c74e630436efe57c4fcc92dfbb0813bc27de47",
+                      "path":  "ui/hud_config.json"
+                  },
+                  {
+                      "sha256":  "25b2f72d820181addc85b66b63520eaf61cb802a44bc7088eea0cd8d8e51de95",
+                      "path":  "verify_backup.py"
+                  },
+                  {
+                      "sha256":  "6ea7e0689cd1a999c95a2e8261020916529d60496318bd86c96f299942945a14",
+                      "path":  "verify_ci_landed.py"
+                  },
+                  {
+                      "sha256":  "e538e5d5f74c09d148bb7afcd6849ac2082ee8183eb048d6160e706ba4b83010",
+                      "path":  "verify_leak_content.py"
+                  },
+                  {
+                      "sha256":  "d83a5f4fce9cd4afc1f56c227ce8ee7a1d47e60978bdf2248b661f3be13bceee",
+                      "path":  "verify_pushed_tree.py"
+                  },
+                  {
+                      "sha256":  "e7468f2f4b4f25021ea838ada3e119073d4b4603225d4e620b8d8b3f752a0928",
+                      "path":  "verify_rebuild_identity.py"
+                  },
+                  {
+                      "sha256":  "604a8ebc784f0f123422031cf43b0a7b44a3ca093a00350c086e0a411a1e0b17",
+                      "path":  "verify_repos.py"
+                  },
+                  {
+                      "sha256":  "2c6c900185aad7a9ed91d88584bdc1401fef86c613a3c5342e9842f511307266",
+                      "path":  "verify_restored.py"
+                  },
+                  {
+                      "sha256":  "9e01f883b84eca862f0d00e8ece342459aacd937549fbd50481eb411f417ed8c",
+                      "path":  "verify_restored.py.bak-empty"
+                  },
+                  {
+                      "sha256":  "32ede4e3f3202b26c0d31e2d2f68199f774edab6a90f8a57402d90d5d17507ba",
+                      "path":  "verify_restored.py.bak-sha"
+                  },
+                  {
+                      "sha256":  "fae9864267994ec6d45f871be37411211124a3fa33afa157c734ce15f6e1ced5",
+                      "path":  "verify_stack_run.py"
+                  },
+                  {
+                      "sha256":  "284f985a32f5f25fe603db10a448b56323c51920a203e42ac081a0004e703b06",
+                      "path":  "verify_stack_run.py.bak-procmatch-20261101"
+                  },
+                  {
+                      "sha256":  "5911f0b45d3497c08515b4e7a7c044d9a9d49d590169ef23dc09c374bf140313",
+                      "path":  "verify_stack_run.py.bak-recovering-20261101"
+                  },
+                  {
+                      "sha256":  "770a64a12d5138cafb61f2239a64e4b64041a2aa1d2480e59db41b9fca1bd3a1",
+                      "path":  "verify_stack_run.py.bak-tickpid-20261101"
+                  },
+                  {
+                      "sha256":  "43579cf11c374ffcbbe077d830237c7ddc7e1877c4dd049e9f67d45161da0bfd",
+                      "path":  "wake_seed.py"
+                  },
+                  {
+                      "sha256":  "3e8c0e6b02db39d448bd45f45a4d46e5e22e3cdb8d39ed4e5d8e6c9b16cfc7d5",
+                      "path":  "wake_seed.py.bak-gemma-20261101-213539"
+                  },
+                  {
+                      "sha256":  "98c5a9ba7ae1232429ab593830bcef4f1a3771886fd714b5f35ce2bf09307e3b",
+                      "path":  "who_owns_that_log.ps1"
+                  },
+                  {
+                      "sha256":  "55a2fd38c8f1b44f67420fbf65beb0e9a565bde03b66fd6bf16763daaacf1cfe",
+                      "path":  "wire_autonomy.py"
+                  }
+              ]
+}
