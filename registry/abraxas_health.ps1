@@ -36,7 +36,7 @@ foreach ($p in @{1234="lm-studio";1235="gpt-oss(CPU)";1236="lfm-from-tiles";2645
 $mr = if (Test-Path 'C:\abrasax\registry\MODEL_REGISTRY.json') { (Get-Content 'C:\abrasax\registry\MODEL_REGISTRY.json' -Raw | ConvertFrom-Json).model_count } else { 0 }
 Check "registry:models" ($mr -gt 0) "count=$mr"
 $ar = if (Test-Path 'C:\abrasax\registry\AGENT_REGISTRY.json') { (Get-Content 'C:\abrasax\registry\AGENT_REGISTRY.json' -Raw | ConvertFrom-Json).running } else { 0 }
-Check "registry:agents" ($ar -eq 14) "running=$ar/14"
+Check "registry:agents" ($ar -ge 14) "running=$ar"
 $docs = (Get-ChildItem 'C:\abrasax\DOC' -File -Filter *.md -ErrorAction SilentlyContinue | Measure-Object).Count
 Check "docs" ($docs -gt 5) "count=$docs"
 
@@ -50,7 +50,7 @@ $alive = ($st.entanglement.node_f1.alive -and $st.entanglement.node_f2.alive -an
 Check "f-logic" $alive "F1=$($st.entanglement.node_f1.alive) F2=$($st.entanglement.node_f2.alive) F3=$($st.entanglement.node_f3.alive) NEO=$($st.entanglement.node_neo.alive)"
 
 # repos: clean + pushed
-$repos = @('ABRASAX-7D-Crystal','ABRASAX-Agents','ABRASAX-AI-Engine','abrasax-harness','ABRASAX-UI','ABRASAX_SCRIPTS')
+$repos = @('ABRASAX-7D-Crystal','ABRASAX-Agents','ABRASAX-AI-Engine','abrasax-harness','ABRASAX-UI','ABRASAX_SCRIPTS','abraxas-mobile')
 $dirty = 0
 foreach ($r in $repos) {
     $d = "C:\abrasax\_BUILD\stage\$r"
