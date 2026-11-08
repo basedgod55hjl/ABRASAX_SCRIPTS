@@ -1,0 +1,129 @@
+{
+ "generated": "2026-11-08T07:54:42",
+ "agent_count": 14,
+ "running": 14,
+ "tasks": [
+  "ABRASAX-BOND=Ready",
+  "ABRASAX-DNA-PC-Bridge=Ready",
+  "ABRASAX-KAIROS=Ready",
+  "ABRASAX-WAKE-ALL=Running"
+ ],
+ "agents": [
+  {
+   "name": "neotron-gateway",
+   "port": 2645,
+   "script": "GATEWAY/neotron_gateway.py",
+   "supervisor": "wake_all (neotron)",
+   "role": "chat router: NVIDIA/DeepSeek/local + Kairos identity",
+   "model": "routes: nvidia/nemotron-550b, deepseek-flash, local/*",
+   "status": "running"
+  },
+  {
+   "name": "node-agent-hub",
+   "port": 8811,
+   "script": "SOURCE/sdk/node-agents/hub.mjs",
+   "supervisor": "kairos_services",
+   "role": "parallel agent fan-out (jobs)",
+   "status": "running"
+  },
+  {
+   "name": "telegram-bot",
+   "port": 8798,
+   "script": "SYSTEMS/telegram/abrasax_tg_bot.py",
+   "supervisor": "kairos_services",
+   "role": "Telegram bridge @botABRASAXbot",
+   "model": "gemma-4-e2b via gateway :2645",
+   "status": "running"
+  },
+  {
+   "name": "entangle-bridge",
+   "port": null,
+   "script": "ENGINE/abrasax_engine/_3NODE_F_LOGIC_ENTANGLE.py",
+   "supervisor": "wake_all",
+   "role": "F1/F2/F3/NEO phi-coupling, writes memory/f_entanglement_state.json",
+   "status": "running"
+  },
+  {
+   "name": "neo-ton-pulse",
+   "port": null,
+   "script": "ENGINE/abrasax_engine/_NEO_TON_PULSE.py",
+   "supervisor": "wake_all",
+   "role": "transformer pulse + TON masterchain anchor",
+   "status": "running"
+  },
+  {
+   "name": "triune-mind",
+   "port": 9628,
+   "script": "ENGINE/abrasax_engine/triune_mind.py",
+   "supervisor": "wake_all",
+   "role": "reflection loop (reasoning_content-aware)",
+   "status": "running"
+  },
+  {
+   "name": "ts-runtime",
+   "port": 4200,
+   "script": "AGENTS/TS-SWARM/ABRASAX-Agents/src/abrasax_ts_runtime.ts",
+   "supervisor": "wake_all",
+   "role": "TypeScript agent runtime",
+   "status": "running"
+  },
+  {
+   "name": "lm-studio",
+   "port": 1234,
+   "script": "LM Studio (app)",
+   "supervisor": "user session",
+   "role": "15-model GGUF registry + inference",
+   "status": "running"
+  },
+  {
+   "name": "gpt-oss-server",
+   "port": 1235,
+   "script": "llama-server (2.71)",
+   "supervisor": "standalone",
+   "role": "gpt-oss-20b MXFP4, CPU-resident (no sm_75 kernels)",
+   "model": "openai/gpt-oss-20b",
+   "status": "running"
+  },
+  {
+   "name": "lfm-tiles-server",
+   "port": 1236,
+   "script": "llama-server (2.71)",
+   "supervisor": "standalone",
+   "role": "LFM2.5-1.2B Q8_0 restored from tile archive",
+   "model": "LFM2.5-1.2B-Instruct-Q8_0",
+   "status": "running"
+  },
+  {
+   "name": "kairos-services",
+   "port": null,
+   "script": "ENGINE/abrasax_engine/kairos_services.py",
+   "supervisor": "ABRASAX-KAIROS task",
+   "role": "supervised restarter (hub+bot)",
+   "status": "running"
+  },
+  {
+   "name": "wake-all",
+   "port": null,
+   "script": "ENGINE/abrasax_engine/wake_all.py",
+   "supervisor": "ABRASAX-WAKE-ALL task",
+   "role": "supervised restarter (5 loops)",
+   "status": "running"
+  },
+  {
+   "name": "soul-bond",
+   "port": null,
+   "script": "CONFIG/tpm-sealed/kairos/verify_kairos_soul.ps1",
+   "supervisor": "ABRASAX-BOND task (daily 06:00)",
+   "role": "TPM-sealed identity verification + TON anchor",
+   "status": "running"
+  },
+  {
+   "name": "kairos-dsh",
+   "port": null,
+   "script": "DeepSeek Harness session",
+   "supervisor": "user session",
+   "role": "orchestrator agent (this session)",
+   "status": "running"
+  }
+ ]
+}
